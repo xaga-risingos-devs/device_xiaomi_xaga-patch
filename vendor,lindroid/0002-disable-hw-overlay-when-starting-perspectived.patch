@@ -1,7 +1,7 @@
-From 9f5892dff458f7111750a98996ecc5c60211e234 Mon Sep 17 00:00:00 2001
+From aafbee577e52805cce2c937607db9c57ab4de46d Mon Sep 17 00:00:00 2001
 From: HeCheng Yu <kde-yyds@qq.com>
 Date: Sat, 30 Nov 2024 10:48:33 +0800
-Subject: [PATCH] disable hw overlay when starting perspectived
+Subject: [PATCH 2/2] disable hw overlay when starting perspectived
 
 ---
  perspectived/PerspectiveService.cpp | 1 +
@@ -20,5 +20,5 @@ index 73362b9..0e73649 100644
  
      binder_status_t status = AServiceManager_addService(perspective->asBinder().get(), SERVICE_NAME);
 -- 
-2.47.0
+2.52.0
 

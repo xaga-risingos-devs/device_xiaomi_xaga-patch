@@ -1,55 +1,47 @@
-From 2f2116668e79fe7a596d41b5b2fd3bb76cca297a Mon Sep 17 00:00:00 2001
+From 3af1e94b1fa8474b531b48b67a0f50150b092bfe Mon Sep 17 00:00:00 2001
 From: Adithya R <gh0strider.2k18.reborn@gmail.com>
 Date: Thu, 16 Jan 2025 18:48:32 +0800
-Subject: [PATCH] SystemUI: Blur the background of SysUI dialogs
+Subject: [PATCH 08/21] SystemUI: Blur the background of SysUI dialogs
 
+Change-Id: I2d2b71da7f3526b2d77ebc80a0157e733a74d138
 ---
- core/res/res/values/derp_dimens.xml           |  10 ++
- core/res/res/values/derp_symbols.xml          |  10 ++
+ core/res/res/values/dimens.xml                |   4 +
+ core/res/res/values/symbols.xml               |   3 +
  .../animation/DialogTransitionAnimator.kt     |  11 ++
- .../com/android/systemui/util/BlurUtils.kt    | 113 ++++++++++++++++++
- 4 files changed, 144 insertions(+)
- create mode 100644 core/res/res/values/derp_dimens.xml
- create mode 100644 core/res/res/values/derp_symbols.xml
+ .../com/android/systemui/util/BlurUtils.kt    | 124 ++++++++++++++++++
+ 4 files changed, 142 insertions(+)
  create mode 100644 packages/SystemUI/animation/src/com/android/systemui/util/BlurUtils.kt
 
-diff --git a/core/res/res/values/derp_dimens.xml b/core/res/res/values/derp_dimens.xml
-new file mode 100644
-index 000000000..f2578f083
---- /dev/null
-+++ b/core/res/res/values/derp_dimens.xml
-@@ -0,0 +1,10 @@
-+<?xml version="1.0" encoding="utf-8"?>
-+<!--
-+Copyright (C) 2024 DerpFest
-+SPDX-License-Identifier: Apache-2.0
-+-->
-+<resources>
+diff --git a/core/res/res/values/dimens.xml b/core/res/res/values/dimens.xml
+index b85e158a6..fd90ff798 100644
+--- a/core/res/res/values/dimens.xml
++++ b/core/res/res/values/dimens.xml
+@@ -1306,4 +1306,8 @@
+ 
+     <!-- Default height of taskbar for Launcher.   -->
+     <dimen name="taskbar_stashed_size">24dp</dimen>
++
 +    <!-- Blur radius used by SystemUI -->
 +    <dimen name="min_window_blur_radius">1px</dimen>
 +    <dimen name="max_window_blur_radius">17.5dp</dimen>
-+</resources>
-diff --git a/core/res/res/values/derp_symbols.xml b/core/res/res/values/derp_symbols.xml
-new file mode 100644
-index 000000000..06b65eef4
---- /dev/null
-+++ b/core/res/res/values/derp_symbols.xml
-@@ -0,0 +1,10 @@
-+<?xml version="1.0" encoding="utf-8"?>
-+<!--
-+Copyright (C) 2024 DerpFest
-+SPDX-License-Identifier: Apache-2.0
-+-->
-+<resources>
-+    <!-- Blur radius used by SystemUI -->
-+    <java-symbol type="dimen" name="min_window_blur_radius" />
-+    <java-symbol type="dimen" name="max_window_blur_radius" />
-+</resources>
+ </resources>
+diff --git a/core/res/res/values/symbols.xml b/core/res/res/values/symbols.xml
+index c23ad76b1..f722e7690 100644
+--- a/core/res/res/values/symbols.xml
++++ b/core/res/res/values/symbols.xml
+@@ -6351,4 +6351,7 @@
+   <java-symbol type="string" name="config_avium_hide_sysapp_notifs_default" />
+   <java-symbol type="string" name="config_avium_disable_sensor_apps_default" />
+ 
++  <!-- Blur radius used by SystemUI -->
++  <java-symbol type="dimen" name="min_window_blur_radius" />
++  <java-symbol type="dimen" name="max_window_blur_radius" />
+ </resources>
 diff --git a/packages/SystemUI/animation/src/com/android/systemui/animation/DialogTransitionAnimator.kt b/packages/SystemUI/animation/src/com/android/systemui/animation/DialogTransitionAnimator.kt
-index 8cb3638b1..9bc75441b 100644
+index 34eb0f150..e82367365 100644
 --- a/packages/SystemUI/animation/src/com/android/systemui/animation/DialogTransitionAnimator.kt
 +++ b/packages/SystemUI/animation/src/com/android/systemui/animation/DialogTransitionAnimator.kt
-@@ -39,6 +39,7 @@ import com.android.systemui.util.maybeForceFullscreen
+@@ -40,6 +40,7 @@ import com.android.systemui.util.maybeForceFullscreen
  import com.android.systemui.util.registerAnimationOnBackInvoked
  import java.util.concurrent.Executor
  import kotlin.math.roundToInt
@@ -57,15 +49,15 @@ index 8cb3638b1..9bc75441b 100644
  
  private const val TAG = "DialogTransitionAnimator"
  
-@@ -586,6 +587,7 @@ private class AnimatedDialog(
-     private var decorViewLayoutListener: View.OnLayoutChangeListener? = null
+@@ -575,6 +576,7 @@ private class AnimatedDialog(
+     private var dialogTouchInterceptorView: ViewGroup? = null
  
      private var hasInstrumentedJank = false
 +    private val blurUtils = BlurUtils(dialog.context.resources)
  
      fun start() {
-         val cuj = controller.cuj
-@@ -974,6 +976,15 @@ private class AnimatedDialog(
+         // Create the dialog so that its onCreate() method is called, which usually sets the dialog
+@@ -993,6 +995,15 @@ private class AnimatedDialog(
                      if (endController is GhostedViewTransitionAnimatorController) {
                          endController.fillGhostedViewState(endState)
                      }
@@ -83,10 +75,10 @@ index 8cb3638b1..9bc75441b 100644
  
 diff --git a/packages/SystemUI/animation/src/com/android/systemui/util/BlurUtils.kt b/packages/SystemUI/animation/src/com/android/systemui/util/BlurUtils.kt
 new file mode 100644
-index 000000000..0eb6dc42d
+index 000000000..64b15b16b
 --- /dev/null
 +++ b/packages/SystemUI/animation/src/com/android/systemui/util/BlurUtils.kt
-@@ -0,0 +1,113 @@
+@@ -0,0 +1,124 @@
 +/*
 + * Copyright (C) 2020 The Android Open Source Project
 + *
@@ -105,6 +97,8 @@ index 000000000..0eb6dc42d
 +package com.android.systemui.util
 +import android.app.ActivityManager
 +import android.content.res.Resources
++import android.gui.EarlyWakeupInfo
++import android.os.Binder
 +import android.os.SystemProperties
 +import android.util.MathUtils
 +import android.view.CrossWindowBlurListeners.CROSS_WINDOW_BLUR_SUPPORTED
@@ -121,6 +115,15 @@ index 000000000..0eb6dc42d
 +    val maxBlurRadius = resources.getDimensionPixelSize(R.dimen.max_window_blur_radius)
 +    private var lastAppliedBlur = 0
 +    private var earlyWakeupEnabled = false
++
++    /** Token for early wakeup requests to SurfaceFlinger. */
++    private val earlyWakeupInfo = EarlyWakeupInfo()
++
++    init {
++        earlyWakeupInfo.token = Binder()
++        earlyWakeupInfo.trace = BlurUtils::class.java.getName()
++    }
++
 +    /**
 +     * Translates a ratio from 0 to 1 to a blur radius in pixels.
 +     */
@@ -153,7 +156,7 @@ index 000000000..0eb6dc42d
 +        if (lastAppliedBlur == 0 && radius != 0) {
 +            earlyWakeupEnabled = true
 +            createTransaction().use {
-+                it.setEarlyWakeupStart()
++                it.setEarlyWakeupStart(earlyWakeupInfo)
 +                it.apply()
 +            }
 +        }
@@ -173,11 +176,11 @@ index 000000000..0eb6dc42d
 +            if (supportsBlursOnWindows()) {
 +                it.setBackgroundBlurRadius(viewRootImpl.surfaceControl, radius)
 +                if (!earlyWakeupEnabled && lastAppliedBlur == 0 && radius != 0) {
-+                    it.setEarlyWakeupStart()
++                    it.setEarlyWakeupStart(earlyWakeupInfo)
 +                    earlyWakeupEnabled = true
 +                }
 +                if (earlyWakeupEnabled && lastAppliedBlur != 0 && radius == 0) {
-+                    it.setEarlyWakeupEnd()
++                    it.setEarlyWakeupEnd(earlyWakeupInfo)
 +                    earlyWakeupEnabled = false
 +                }
 +                lastAppliedBlur = radius
@@ -201,5 +204,5 @@ index 000000000..0eb6dc42d
 +    }
 +}
 -- 
-2.47.1
+2.53.0
 

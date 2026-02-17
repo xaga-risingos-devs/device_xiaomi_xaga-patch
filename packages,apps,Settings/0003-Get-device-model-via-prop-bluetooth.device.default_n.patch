@@ -1,0 +1,28 @@
+From 311e7ec2b5f2550bcd87c62776f5f535de4d06a0 Mon Sep 17 00:00:00 2001
+From: Hecheng Yu <kde-yyds@qq.com>
+Date: Sun, 25 Jan 2026 09:54:07 +0800
+Subject: [PATCH 3/3] Get device model via prop bluetooth.device.default_name
+
+Change-Id: Iae5f6251a7fd713f08ae83345161422ab4f661bc
+---
+ .../settings/aboutphone/AviumDeviceInfoCardController.java    | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/org/avium/settings/aboutphone/AviumDeviceInfoCardController.java b/src/org/avium/settings/aboutphone/AviumDeviceInfoCardController.java
+index df1d864..c610ba1 100644
+--- a/src/org/avium/settings/aboutphone/AviumDeviceInfoCardController.java
++++ b/src/org/avium/settings/aboutphone/AviumDeviceInfoCardController.java
+@@ -100,8 +100,8 @@ public class AviumDeviceInfoCardController extends AbstractPreferenceController
+     }
+ 
+     private String getDeviceModel() {
+-        if (!SystemProperties.get("ro.avium.device.codename").equals("Unknown")) {
+-            return SystemProperties.get("ro.avium.device.codename");
++        if (!SystemProperties.get("bluetooth.device.default_name").equals("Unknown")) {
++            return SystemProperties.get("bluetooth.device.default_name");
+         }
+         return SystemProperties.get("ro.product.model", Build.MODEL);
+     }
+-- 
+2.52.0
+

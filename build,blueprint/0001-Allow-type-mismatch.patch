@@ -1,0 +1,28 @@
+From 2cd47702462c74799ff38d79c28b65012f18ea0f Mon Sep 17 00:00:00 2001
+From: Hecheng Yu <kde-yyds@qq.com>
+Date: Sun, 1 Feb 2026 19:45:53 +0800
+Subject: [PATCH] Allow type mismatch
+
+Change-Id: I439769a1eaa122af2d12eaf5abebe77a98e6d284
+---
+ proptools/configurable.go | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/proptools/configurable.go b/proptools/configurable.go
+index 0d45134..f185bda 100644
+--- a/proptools/configurable.go
++++ b/proptools/configurable.go
+@@ -826,10 +826,6 @@ func (c *singleConfigurable[T]) evaluateNonTransitive(propertyName string, evalu
+ 	for _, case_ := range c.cases {
+ 		allMatch := true
+ 		for i, pat := range case_.patterns {
+-			if !pat.matchesValueType(values[i]) {
+-				evaluator.PropertyErrorf(propertyName, "Expected all branches of a select on condition %s to have type %s, found %s", c.conditions[i].String(), values[i].typ.String(), pat.typ.String())
+-				return nil
+-			}
+ 			if !pat.matchesValue(values[i]) {
+ 				allMatch = false
+ 				nonMatchingIndex = i
+-- 
+2.52.0
+

@@ -1,0 +1,373 @@
+From 6b2e271f4c4ecbbd80db987ec04f897a76df4969 Mon Sep 17 00:00:00 2001
+From: Nauval Rizky <enuma.alrizky@gmail.com>
+Date: Mon, 27 Dec 2021 17:05:57 +0700
+Subject: [PATCH 11/21] SystemUI: Add support for GameSpace
+
+This is an addon for GameSpace for broadcasting about game start/stop.
+Additionally, it also has special option for suppressing fullscreen
+intent like incoming call.
+
+This also squash commits:
+- SystemUI: Improve GameSpace lifecycle and broadcast handling
+- GameSpaceManager: Handle various case against "locking screen" scenario
+- GameSpace: Fix issue with multiple users [neobuddy89]
+- SystemUI: Update gamespace for A13 [Genkzsz11]
+- GameSpaceManager: restrict broadcast to MANAGE_GAME_MODE holders only
+- GameSpaceManager: Update TaskStack listener usage
+- GameSpaceManager: Updated for A14 QPR1 [neobuddy89]
+
+Change-Id: Icf02065d7d8a055282ec70ecf3f35472aad8df0a
+Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+---
+ core/java/android/provider/Settings.java      |  14 ++
+ core/res/AndroidManifest.xml                  |   4 +
+ packages/SystemUI/AndroidManifest.xml         |   3 +
+ .../statusbar/phone/CentralSurfaces.java      |   3 +
+ .../statusbar/phone/CentralSurfacesImpl.java  |  11 ++
+ .../StatusBarNotificationActivityStarter.java |   9 +
+ .../statusbar/policy/GameSpaceManager.kt      | 169 ++++++++++++++++++
+ 7 files changed, 213 insertions(+)
+ create mode 100644 packages/SystemUI/src/com/android/systemui/statusbar/policy/GameSpaceManager.kt
+
+diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
+index 6ed108c74..957d35377 100644
+--- a/core/java/android/provider/Settings.java
++++ b/core/java/android/provider/Settings.java
+@@ -7241,6 +7241,20 @@ public final class Settings {
+         public static final String WIFI_WATCHDOG_PING_TIMEOUT_MS =
+             Secure.WIFI_WATCHDOG_PING_TIMEOUT_MS;
+ 
++        /**
++         * GameSpace: List of added games by user
++         * @hide
++         */
++        @Readable
++        public static final String GAMESPACE_GAME_LIST = "gamespace_game_list";
++
++        /**
++         * GameSpace: Whether fullscreen intent will be suppressed while in game session
++         * @hide
++         */
++        @Readable
++        public static final String GAMESPACE_SUPPRESS_FULLSCREEN_INTENT = "gamespace_suppress_fullscreen_intent";
++
+         /**
+          * Checks if the specified app can modify system settings. As of API
+          * level 23, an app cannot modify system settings unless it declares the
+diff --git a/core/res/AndroidManifest.xml b/core/res/AndroidManifest.xml
+index 0b25ab793..01edb4a92 100644
+--- a/core/res/AndroidManifest.xml
++++ b/core/res/AndroidManifest.xml
+@@ -875,6 +875,10 @@
+     <!-- Used for long press power torch feature - automatic turn off on timeout -->
+     <protected-broadcast android:name="com.android.server.policy.PhoneWindowManager.ACTION_TORCH_OFF" />
+ 
++    <!-- GameSpace -->
++    <protected-broadcast android:name="io.chaldeaprjkt.gamespace.action.GAME_START" />
++    <protected-broadcast android:name="io.chaldeaprjkt.gamespace.action.GAME_STOP" />
++
+     <!-- ====================================================================== -->
+     <!--                          RUNTIME PERMISSIONS                           -->
+     <!-- ====================================================================== -->
+diff --git a/packages/SystemUI/AndroidManifest.xml b/packages/SystemUI/AndroidManifest.xml
+index 33372acb8..e116d497e 100644
+--- a/packages/SystemUI/AndroidManifest.xml
++++ b/packages/SystemUI/AndroidManifest.xml
+@@ -407,6 +407,9 @@
+     <!-- DataSwitch tile -->
+     <uses-permission android:name="android.permission.WRITE_APN_SETTINGS" />
+ 
++    <!-- To broadcast status of the GameSpaceManager -->
++    <uses-permission android:name="android.permission.MANAGE_GAME_MODE" />
++
+     <protected-broadcast android:name="com.android.settingslib.action.REGISTER_SLICE_RECEIVER" />
+     <protected-broadcast android:name="com.android.settingslib.action.UNREGISTER_SLICE_RECEIVER" />
+     <protected-broadcast android:name="com.android.settings.flashlight.action.FLASHLIGHT_CHANGED" />
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/CentralSurfaces.java b/packages/SystemUI/src/com/android/systemui/statusbar/phone/CentralSurfaces.java
+index 2d74fac08..b69e1c29b 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/CentralSurfaces.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/CentralSurfaces.java
+@@ -44,6 +44,7 @@ import com.android.systemui.plugins.ActivityStarter.OnDismissAction;
+ import com.android.systemui.qs.QSPanelController;
+ import com.android.systemui.shared.statusbar.phone.BarTransitions;
+ import com.android.systemui.statusbar.notification.row.ExpandableNotificationRow;
++import com.android.systemui.statusbar.policy.GameSpaceManager;
+ import com.android.systemui.util.Compile;
+ 
+ import java.io.PrintWriter;
+@@ -354,4 +355,6 @@ public interface CentralSurfaces extends Dumpable, LifecycleOwner, CoreStartable
+             ExpandableNotificationRow associatedView);
+ 
+     void toggleCameraFlash();
++
++    GameSpaceManager getGameSpaceManager();
+ }
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/CentralSurfacesImpl.java b/packages/SystemUI/src/com/android/systemui/statusbar/phone/CentralSurfacesImpl.java
+index 1db173a76..b86a87241 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/CentralSurfacesImpl.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/CentralSurfacesImpl.java
+@@ -225,6 +225,7 @@ import com.android.systemui.statusbar.policy.ConfigurationController.Configurati
+ import com.android.systemui.statusbar.policy.DeviceProvisionedController;
+ import com.android.systemui.statusbar.policy.DeviceProvisionedController.DeviceProvisionedListener;
+ import com.android.systemui.statusbar.policy.ExtensionController;
++import com.android.systemui.statusbar.policy.GameSpaceManager;
+ import com.android.systemui.statusbar.notification.headsup.HeadsUpManager;
+ import com.android.systemui.statusbar.policy.FlashlightController;
+ import com.android.systemui.statusbar.policy.KeyguardStateController;
+@@ -466,6 +467,8 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
+     private final UserTracker mUserTracker;
+     private final ActivityStarter mActivityStarter;
+ 
++    private final GameSpaceManager mGameSpaceManager;
++
+     private final DisplayMetrics mDisplayMetrics;
+ 
+     // XXX: gesture research
+@@ -852,6 +855,8 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
+         mActivityIntentHelper = new ActivityIntentHelper(mContext);
+         mActivityTransitionAnimator = activityTransitionAnimator;
+ 
++        mGameSpaceManager = new GameSpaceManager(mContext, mKeyguardStateController);
++
+         // TODO(b/190746471): Find a better home for this.
+         DateTimeView.setReceiverHandler(timeTickHandler);
+ 
+@@ -1490,6 +1495,12 @@ public class CentralSurfacesImpl implements CoreStartable, CentralSurfaces {
+         filter.addAction(Intent.ACTION_SCREEN_OFF);
+         filter.addAction(lineageos.content.Intent.ACTION_SCREEN_CAMERA_GESTURE);
+         mBroadcastDispatcher.registerReceiver(mBroadcastReceiver, filter, null, UserHandle.ALL);
++        mGameSpaceManager.observe();
++    }
++
++    @Override
++    public GameSpaceManager getGameSpaceManager() {
++        return mGameSpaceManager;
+     }
+ 
+     protected QS createDefaultQSFragment() {
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBarNotificationActivityStarter.java b/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBarNotificationActivityStarter.java
+index 665681152..10bbea326 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBarNotificationActivityStarter.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBarNotificationActivityStarter.java
+@@ -83,6 +83,7 @@ import com.android.systemui.statusbar.notification.headsup.HeadsUpUtil;
+ import com.android.systemui.statusbar.notification.row.ExpandableNotificationRow;
+ import com.android.systemui.statusbar.notification.row.ExpandableNotificationRowDragController;
+ import com.android.systemui.statusbar.notification.row.OnUserInteractionCallback;
++import com.android.systemui.statusbar.policy.GameSpaceManager;
+ import com.android.systemui.statusbar.policy.KeyguardStateController;
+ import com.android.systemui.wmshell.BubblesManager;
+ 
+@@ -147,6 +148,7 @@ public class StatusBarNotificationActivityStarter implements NotificationActivit
+     private final MetricsLogger mMetricsLogger;
+     private final StatusBarNotificationActivityStarterLogger mLogger;
+ 
++    private final CentralSurfaces mCentralSurfaces;
+     private final NotificationPresenter mPresenter;
+     private final PanelExpansionInteractor mPanelExpansionInteractor;
+     private final NotificationShadeWindowController mNotificationShadeWindowController;
+@@ -185,6 +187,7 @@ public class StatusBarNotificationActivityStarter implements NotificationActivit
+             MetricsLogger metricsLogger,
+             StatusBarNotificationActivityStarterLogger logger,
+             OnUserInteractionCallback onUserInteractionCallback,
++            CentralSurfaces centralSurfaces,
+             NotificationPresenter presenter,
+             PanelExpansionInteractor panelExpansionInteractor,
+             NotificationShadeWindowController notificationShadeWindowController,
+@@ -221,6 +224,7 @@ public class StatusBarNotificationActivityStarter implements NotificationActivit
+         mShadeAnimationInteractor = shadeAnimationInteractor;
+         mMetricsLogger = metricsLogger;
+         mLogger = logger;
++        mCentralSurfaces = centralSurfaces;
+         mOnUserInteractionCallback = onUserInteractionCallback;
+         mPresenter = presenter;
+         mActivityTransitionAnimator = activityTransitionAnimator;
+@@ -691,6 +695,11 @@ public class StatusBarNotificationActivityStarter implements NotificationActivit
+ 
+     @VisibleForTesting
+     void launchFullScreenIntent(NotificationEntry entry) {
++        GameSpaceManager gameSpace = mCentralSurfaces.getGameSpaceManager();
++        if (gameSpace != null && gameSpace.shouldSuppressFullScreenIntent()) {
++            return;
++        }
++
+         // Skip if device is in VR mode.
+         if (mPresenter.isDeviceInVrMode()) {
+             mLogger.logFullScreenIntentSuppressedByVR(entry);
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/policy/GameSpaceManager.kt b/packages/SystemUI/src/com/android/systemui/statusbar/policy/GameSpaceManager.kt
+new file mode 100644
+index 000000000..5ee010249
+--- /dev/null
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/policy/GameSpaceManager.kt
+@@ -0,0 +1,169 @@
++/*
++ * Copyright (C) 2021 Chaldeaprjkt
++ * Copyright (C) 2022-2025 crDroid Android Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License
++ */
++
++package com.android.systemui.statusbar.policy
++
++import android.app.ActivityTaskManager
++import android.content.BroadcastReceiver
++import android.content.ComponentName
++import android.content.Context
++import android.content.Intent
++import android.content.IntentFilter
++import android.os.Handler
++import android.os.Looper
++import android.os.Message
++import android.os.PowerManager
++import android.os.RemoteException
++import android.os.UserHandle
++import android.provider.Settings
++import com.android.systemui.dagger.SysUISingleton
++import com.android.systemui.shared.system.TaskStackChangeListener
++import com.android.systemui.shared.system.TaskStackChangeListeners
++
++import java.util.Arrays
++import javax.inject.Inject
++
++@SysUISingleton
++class GameSpaceManager @Inject constructor(
++    private val context: Context,
++    private val keyguardStateController: KeyguardStateController,
++) {
++    private val handler by lazy { GameSpaceHandler(Looper.getMainLooper()) }
++    private val taskManager by lazy { ActivityTaskManager.getService() }
++
++    private var activeGame: String? = null
++    private var isRegistered = false
++
++    private val taskStackChangeListener = object : TaskStackChangeListener {
++        override fun onTaskStackChanged() {
++            handler.sendEmptyMessage(MSG_UPDATE_FOREGROUND_APP)
++        }
++    }
++
++    private val interactivityReceiver = object : BroadcastReceiver() {
++        override fun onReceive(context: Context?, intent: Intent?) {
++            when (intent?.action) {
++                Intent.ACTION_SCREEN_OFF -> {
++                    activeGame = null
++                    handler.sendEmptyMessage(MSG_DISPATCH_FOREGROUND_APP)
++                }
++            }
++        }
++    }
++
++    private val keyguardStateCallback = object : KeyguardStateController.Callback {
++        override fun onKeyguardShowingChanged() {
++            if (keyguardStateController.isShowing) return
++            handler.sendEmptyMessage(MSG_UPDATE_FOREGROUND_APP)
++        }
++    }
++
++    private inner class GameSpaceHandler(looper: Looper) : Handler(looper, null, true) {
++        override fun handleMessage(msg: Message) {
++            when (msg.what) {
++                MSG_UPDATE_FOREGROUND_APP -> checkForegroundApp()
++                MSG_DISPATCH_FOREGROUND_APP -> dispatchForegroundApp()
++            }
++        }
++    }
++
++    private fun checkForegroundApp() {
++        try {
++            val info = taskManager.focusedRootTaskInfo
++            info?.topActivity ?: return
++            val packageName = info.topActivity?.packageName
++            activeGame = checkGameList(packageName)
++            handler.sendEmptyMessage(MSG_DISPATCH_FOREGROUND_APP)
++        } catch (e: RemoteException) {
++        }
++    }
++
++    private fun dispatchForegroundApp() {
++        val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
++        if (!pm.isInteractive && activeGame != null) return
++        val action = if (activeGame != null) ACTION_GAME_START else ACTION_GAME_STOP
++        Intent(action).apply {
++            setPackage(GAMESPACE_PACKAGE)
++            component = ComponentName.unflattenFromString(RECEIVER_CLASS)
++            putExtra(EXTRA_CALLER_NAME, context.packageName)
++            if (activeGame != null) putExtra(EXTRA_ACTIVE_GAME, activeGame)
++            addFlags(Intent.FLAG_RECEIVER_REPLACE_PENDING
++                or Intent.FLAG_RECEIVER_FOREGROUND
++                or Intent.FLAG_RECEIVER_INCLUDE_BACKGROUND)
++            context.sendBroadcastAsUser(this, UserHandle.CURRENT,
++                android.Manifest.permission.MANAGE_GAME_MODE)
++        }
++    }
++
++    fun observe() {
++        val taskStackChangeListeners = TaskStackChangeListeners.getInstance();
++        if (isRegistered) {
++            taskStackChangeListeners.unregisterTaskStackListener(taskStackChangeListener)
++        }
++        taskStackChangeListeners.registerTaskStackListener(taskStackChangeListener)
++        isRegistered = true;
++        handler.sendEmptyMessage(MSG_UPDATE_FOREGROUND_APP)
++        context.registerReceiver(interactivityReceiver, IntentFilter().apply {
++            addAction(Intent.ACTION_SCREEN_OFF)
++        }, Context.RECEIVER_NOT_EXPORTED)
++        keyguardStateController.addCallback(keyguardStateCallback)
++    }
++
++    fun unobserve() {
++        val taskStackChangeListeners = TaskStackChangeListeners.getInstance();
++        if (!isRegistered) {
++            taskStackChangeListeners.unregisterTaskStackListener(taskStackChangeListener)
++        }
++        isRegistered = false;
++        context.unregisterReceiver(interactivityReceiver)
++        keyguardStateController.removeCallback(keyguardStateCallback)
++    }
++
++    fun isGameActive() = activeGame != null
++
++    fun shouldSuppressFullScreenIntent() =
++        Settings.System.getIntForUser(
++            context.contentResolver,
++            Settings.System.GAMESPACE_SUPPRESS_FULLSCREEN_INTENT, 0,
++            UserHandle.USER_CURRENT) == 1 && isGameActive()
++
++    private fun checkGameList(packageName: String?): String? {
++        packageName ?: return null
++        val games = Settings.System.getStringForUser(
++            context.contentResolver,
++            Settings.System.GAMESPACE_GAME_LIST,
++            UserHandle.USER_CURRENT)
++
++        if (games.isNullOrEmpty())
++            return null
++
++        return games.split(";")
++            .map { it.split("=").first() }
++            .firstOrNull { it == packageName }
++    }
++
++    companion object {
++        private const val ACTION_GAME_START = "io.chaldeaprjkt.gamespace.action.GAME_START"
++        private const val ACTION_GAME_STOP = "io.chaldeaprjkt.gamespace.action.GAME_STOP"
++        private const val GAMESPACE_PACKAGE = "io.chaldeaprjkt.gamespace"
++        private const val RECEIVER_CLASS = "io.chaldeaprjkt.gamespace/.gamebar.GameBroadcastReceiver"
++        private const val EXTRA_CALLER_NAME = "source"
++        private const val EXTRA_ACTIVE_GAME = "package_name"
++        private const val MSG_UPDATE_FOREGROUND_APP = 0
++        private const val MSG_DISPATCH_FOREGROUND_APP = 1
++    }
++}
+-- 
+2.53.0
+
