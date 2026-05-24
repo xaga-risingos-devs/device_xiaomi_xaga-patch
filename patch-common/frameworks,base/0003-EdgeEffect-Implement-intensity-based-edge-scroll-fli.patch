@@ -1,0 +1,127 @@
+From 90083938301bae66ac3f44412198fb56ff9bec5a Mon Sep 17 00:00:00 2001
+From: minaripenguin <minaripenguin@users.noreply.github.com>
+Date: Thu, 14 Mar 2024 19:07:49 +0800
+Subject: [PATCH 3/5] EdgeEffect: Implement intensity-based edge scroll fling
+ haptics
+
+squashed:
+
+	From: minaripenguin <minaripenguin@users.noreply.github.com>
+	Date: Sat, 7 Dec 2024 17:13:14 +0800
+	Subject: [PATCH] EdgeEffect: Add rate limit to vibration haptic effect
+
+Co-authored-by: Blaster4385 <venkateshchaturvedi12@gmail.com>
+Change-Id: Icf667c9889ace493e07475e14c5d8f5fbfade50e
+Signed-off-by: minaripenguin <minaripenguin@users.noreply.github.com>
+---
+ core/java/android/provider/Settings.java |  6 ++++++
+ core/java/android/widget/EdgeEffect.java | 23 +++++++++++++++++++++++
+ 2 files changed, 29 insertions(+)
+
+diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
+index 9290d8049..b65837ff0 100644
+--- a/core/java/android/provider/Settings.java
++++ b/core/java/android/provider/Settings.java
+@@ -7995,6 +7995,12 @@ public final class Settings {
+         @Deprecated
+         public static final String WIFI_WATCHDOG_PING_DELAY_MS = Secure.WIFI_WATCHDOG_PING_DELAY_MS;
+ 
++        /**
++         * @hide
++         */
++        @Readable
++        public static final String EDGE_SCROLLING_HAPTICS_INTENSITY = "edge_scrolling_haptics_intensity";
++
+         /**
+          * @deprecated Use {@link android.provider.Settings.Secure#WIFI_WATCHDOG_PING_TIMEOUT_MS}
+          * instead
+diff --git a/core/java/android/widget/EdgeEffect.java b/core/java/android/widget/EdgeEffect.java
+index c110ab956..6f3284ffd 100644
+--- a/core/java/android/widget/EdgeEffect.java
++++ b/core/java/android/widget/EdgeEffect.java
+@@ -26,6 +26,7 @@ import android.compat.annotation.ChangeId;
+ import android.compat.annotation.EnabledSince;
+ import android.compat.annotation.UnsupportedAppUsage;
+ import android.content.Context;
++import android.content.pm.PackageManager;
+ import android.content.res.TypedArray;
+ import android.graphics.BlendMode;
+ import android.graphics.Canvas;
+@@ -35,6 +36,7 @@ import android.graphics.RecordingCanvas;
+ import android.graphics.Rect;
+ import android.graphics.RenderNode;
+ import android.os.Build;
++import android.provider.Settings;
+ import android.util.AttributeSet;
+ import android.view.animation.AnimationUtils;
+ import android.view.animation.DecelerateInterpolator;
+@@ -43,6 +45,8 @@ import android.view.animation.Interpolator;
+ import java.lang.annotation.Retention;
+ import java.lang.annotation.RetentionPolicy;
+ 
++import com.android.internal.util.android.VibrationUtils;
++
+ /**
+  * This class performs the graphical effect used at the edges of scrollable widgets
+  * when the user scrolls beyond the content bounds in 2D space.
+@@ -218,6 +222,9 @@ public class EdgeEffect {
+     private float mDisplacement = 0.5f;
+     private float mTargetDisplacement = 0.5f;
+ 
++    private Context mContext;
++    private long mLastVibrationTime = 0;
++
+     /**
+      * Current edge effect type, consumers should always query
+      * {@link #getCurrentEdgeEffectBehavior()} instead of this parameter
+@@ -233,6 +240,7 @@ public class EdgeEffect {
+      */
+     public EdgeEffect(Context context) {
+         this(context, null);
++        mContext = context;
+     }
+ 
+     /**
+@@ -241,6 +249,7 @@ public class EdgeEffect {
+      * @param attrs The attributes of the XML tag that is inflating the view
+      */
+     public EdgeEffect(@NonNull Context context, @Nullable AttributeSet attrs) {
++        mContext = context;
+         final TypedArray a = context.obtainStyledAttributes(
+                 attrs, com.android.internal.R.styleable.EdgeEffect);
+         final int themeColor = a.getColor(
+@@ -497,6 +506,7 @@ public class EdgeEffect {
+             mState = STATE_RECEDE;
+             mVelocity = velocity * ON_ABSORB_VELOCITY_ADJUSTMENT;
+             mStartTime = AnimationUtils.currentAnimationTimeMillis();
++            triggerVibration();
+         } else if (edgeEffectBehavior == TYPE_GLOW) {
+             mState = STATE_ABSORB;
+             mVelocity = 0;
+@@ -521,10 +531,23 @@ public class EdgeEffect {
+                     mGlowAlphaStart,
+                     Math.min(velocity * VELOCITY_GLOW_FACTOR * .00001f, MAX_ALPHA));
+             mTargetDisplacement = 0.5f;
++            triggerVibration();
+         } else {
+             finish();
+         }
+     }
++    
++    private void triggerVibration() {
++        boolean callerHasVibratePermission = mContext.checkCallingOrSelfPermission(
++                    android.Manifest.permission.VIBRATE) == PackageManager.PERMISSION_GRANTED;
++        int vibrateIntensity = Settings.System.getInt(mContext.getContentResolver(),
++                Settings.System.EDGE_SCROLLING_HAPTICS_INTENSITY, 3);
++        long currentTime = AnimationUtils.currentAnimationTimeMillis();
++        if (callerHasVibratePermission && (currentTime - mLastVibrationTime >= 17)) {
++            VibrationUtils.triggerVibration(mContext, vibrateIntensity);
++            mLastVibrationTime = currentTime;
++        }
++    }
+ 
+     /**
+      * Set the color of this edge effect in argb.
+-- 
+2.54.0
+

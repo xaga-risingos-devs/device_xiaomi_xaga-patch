@@ -1,0 +1,35 @@
+From 303c9442280915b3b6972fe7ae38f8b8b7ce61e1 Mon Sep 17 00:00:00 2001
+From: Hecheng Yu <kde-yyds@qq.com>
+Date: Sat, 7 Mar 2026 21:48:56 +0800
+Subject: [PATCH 5/6] Force non-resizeable app in freeform
+
+---
+ .../com/libremobileos/sidebar/utils/AppExtension.kt   | 11 ++---------
+ 1 file changed, 2 insertions(+), 9 deletions(-)
+
+diff --git a/sidebar/app/src/main/java/com/libremobileos/sidebar/utils/AppExtension.kt b/sidebar/app/src/main/java/com/libremobileos/sidebar/utils/AppExtension.kt
+index 543910a..0c44439 100644
+--- a/sidebar/app/src/main/java/com/libremobileos/sidebar/utils/AppExtension.kt
++++ b/sidebar/app/src/main/java/com/libremobileos/sidebar/utils/AppExtension.kt
+@@ -8,16 +8,9 @@ import android.graphics.drawable.Drawable
+ import android.os.UserHandle
+ import android.util.Log
+ 
+-fun Application.isResizeableActivity(component: ComponentName): Boolean {
+-    return runCatching { packageManager.getActivityInfo(component, /* flags */ 0) }
+-        .onFailure { Log.e(MAIN_TAG, "failed to get activity info for $component: $it") }
+-        .getOrNull()
+-        ?.let { ActivityInfo.isResizeableMode(it.resizeMode) }
+-        ?: false
+-}
++fun Application.isResizeableActivity(component: ComponentName): Boolean = true
+ 
+-fun Application.isResizeableActivity(packageName: String, activityName: String): Boolean =
+-    isResizeableActivity(ComponentName(packageName, activityName))
++fun Application.isResizeableActivity(packageName: String, activityName: String): Boolean = true
+ 
+ fun Application.getBadgedIcon(appInfo: ApplicationInfo, userHandle: UserHandle): Drawable =
+     packageManager.getUserBadgedIcon(
+-- 
+2.54.0
+

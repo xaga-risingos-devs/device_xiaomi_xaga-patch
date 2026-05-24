@@ -1,0 +1,593 @@
+From 216c323fb26a4c83b1f6949fe4de118d31a29511 Mon Sep 17 00:00:00 2001
+From: Hecheng Yu <kde-yyds@qq.com>
+Date: Thu, 19 Feb 2026 11:26:05 +0800
+Subject: [PATCH 4/6] sidebar: Implement threshold gesture and morph animation
+
+This commit improves the sidebar interaction to feel more fluid and responsive,
+mimicking the HyperOS sidebar experience.
+
+Gesture Changes:
+- Replaced the legacy velocity-based `onFling` detection (which only
+  triggered after lifting the finger) with a real-time drag threshold logic.
+- The sidebar now triggers an expansion when dragged past a specific
+  threshold (80px) and triggers a collapse if the finger moves back.
+
+Animation Changes:
+- Replaced the simple linear slide with a Morph animation
+  (Scale 0.0->1.0, Alpha 0->1, Translation).
+- Implemented `PathInterpolator` (0.19, 1.0, 0.22, 1.0) to replicate
+  the OutExpo easing curve for a premium feel.
+- Extended animation duration to 600ms for smoothness.
+- Fixed animation pivot logic to ensure the panel expands symmetrically
+  from the vertical center.
+- Animations are now fully interruptible; reversing the gesture immediately
+  reverses the animation state.
+
+State Handling:
+- Updated SidebarView to manage visibility states via animations instead
+  of immediate WindowManager removal.
+---
+ .../sidebar/service/GestureListener.kt        |  87 ++++-
+ .../sidebar/service/SidebarService.kt         |  21 ++
+ .../sidebar/service/SidebarView.kt            | 333 +++++++++++-------
+ 3 files changed, 310 insertions(+), 131 deletions(-)
+
+diff --git a/sidebar/app/src/main/java/com/libremobileos/sidebar/service/GestureListener.kt b/sidebar/app/src/main/java/com/libremobileos/sidebar/service/GestureListener.kt
+index b24ebc3..a7bab7b 100644
+--- a/sidebar/app/src/main/java/com/libremobileos/sidebar/service/GestureListener.kt
++++ b/sidebar/app/src/main/java/com/libremobileos/sidebar/service/GestureListener.kt
+@@ -4,6 +4,7 @@ import android.os.Handler
+ import android.os.Looper
+ import android.view.MotionEvent
+ import com.libremobileos.sidebar.utils.Logger
++import kotlin.math.abs
+ 
+ /**
+  * @author KindBrave
+@@ -13,15 +14,28 @@ class GestureListener(private val callback: Callback) : MGestureManager.MGesture
+     private val logger = Logger(TAG)
+     private var initialTouchX = 0.0f
+     private var initialTouchY = 0.0f
++
++    // Logic flags
++    private var isDragging = false
++    private var hasTriggeredExpand = false
++
++    // Long press logic (Legacy)
+     private var isLongPress = false
+     private val longPressHandler = Handler(Looper.getMainLooper())
+     private val longPressRunnable = Runnable {
+         isLongPress = true
+-        callback.beginMoveSideline()
++        // Only trigger long press if we aren't already dragging the sidebar open
++        if (!isDragging) {
++            callback.beginMoveSideline()
++        }
+     }
+ 
+     companion object {
+         private const val TAG = "GestureListener"
++        // Distance in pixels to trigger the expansion
++        private const val TRIGGER_THRESHOLD = 80f
++        // Minimum distance to consider it a swipe intent (ignore jitter)
++        private const val TOUCH_SLOP = 20f
+     }
+ 
+     override fun singleFingerSlipAction(
+@@ -30,12 +44,9 @@ class GestureListener(private val callback: Callback) : MGestureManager.MGesture
+         endEvent: MotionEvent?,
+         velocity: Float
+     ): Boolean {
+-        if (null != gestureEvent) {
+-            if (gestureEvent == MGestureManager.GestureEvent.SINGLE_GINGER_LEFT_SLIP || gestureEvent == MGestureManager.GestureEvent.SINGLE_GINGER_RIGHT_SLIP) {
+-                callback.showSidebar()
+-            }
+-            return true
+-        }
++        // We no longer use velocity/fling to trigger the sidebar.
++        // Returning false allows the system to process it if needed,
++        // but since we handle logic in onTouchEvent, this is mostly unused.
+         return false
+     }
+ 
+@@ -45,27 +56,81 @@ class GestureListener(private val callback: Callback) : MGestureManager.MGesture
+             MotionEvent.ACTION_DOWN -> {
+                 initialTouchX = event.rawX
+                 initialTouchY = event.rawY
++                isDragging = false
++                hasTriggeredExpand = false
+ 
+                 isLongPress = false
+                 longPressHandler.postDelayed(longPressRunnable, 500)
+             }
+             MotionEvent.ACTION_MOVE -> {
+-                if (isLongPress) {
+-                    callback.moveSideline((event.rawX - initialTouchX).toInt(), (event.rawY - initialTouchY).toInt(), event.rawX.toInt(), event.rawY.toInt())
++                val deltaX = event.rawX - initialTouchX
++                val absDeltaX = abs(deltaX)
++                val absDeltaY = abs(event.rawY - initialTouchY)
++
++                // 1. Detect Drag Intent
++                // Check if moved horizontally enough to be a drag, and more horizontal than vertical
++                if (!isDragging && !isLongPress && absDeltaX > TOUCH_SLOP && absDeltaX > absDeltaY) {
++                    isDragging = true
++                    longPressHandler.removeCallbacks(longPressRunnable)
++                }
++
++                // 2. Handle Threshold Logic
++                if (isDragging) {
++                    // Trigger Expand: Crossed threshold
++                    if (!hasTriggeredExpand && absDeltaX > TRIGGER_THRESHOLD) {
++                        hasTriggeredExpand = true
++                        // Pass rawY to set the animation pivot point
++                        callback.onExpandTriggered(event.rawY)
++                    }
++                    // Trigger Collapse: User regretted and moved finger back
++                    else if (hasTriggeredExpand && absDeltaX < TRIGGER_THRESHOLD) {
++                        hasTriggeredExpand = false
++                        callback.onCollapseTriggered()
++                    }
++                }
++                // 3. Handle Long Press Move (Existing logic)
++                else if (isLongPress) {
++                    callback.moveSideline(
++                        (event.rawX - initialTouchX).toInt(),
++                                          (event.rawY - initialTouchY).toInt(),
++                                          event.rawX.toInt(),
++                                          event.rawY.toInt()
++                    )
+                     initialTouchX = event.rawX
+                     initialTouchY = event.rawY
+                 }
+             }
+             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                 longPressHandler.removeCallbacks(longPressRunnable)
++
++                // If user lifts finger, finalize the state
++                if (isDragging) {
++                    if (!hasTriggeredExpand) {
++                        // Dragged a bit but not enough, or dragged back
++                        callback.onCollapseTriggered()
++                    }
++                    // If hasTriggeredExpand is true, we leave it open.
++                    // The service/view doesn't need an explicit "End" call
++                    // because the animation handles the visual state.
++                } else if (isLongPress) {
++                    callback.endMoveSideline()
++                }
++
++                // Reset
++                isDragging = false
++                hasTriggeredExpand = false
+                 isLongPress = false
+-                callback.endMoveSideline()
+             }
+         }
+     }
+ 
+     interface Callback {
+-        fun showSidebar()
++        // New methods for Threshold Swipe
++        fun onExpandTriggered(touchY: Float)
++        fun onCollapseTriggered()
++
++        // Existing methods for Handle Movement
++        fun showSidebar() // Kept for legacy/debug, though mostly replaced
+         fun beginMoveSideline()
+         fun moveSideline(xChanged: Int, yChanged: Int, touchX: Int, touchY: Int)
+         fun endMoveSideline()
+diff --git a/sidebar/app/src/main/java/com/libremobileos/sidebar/service/SidebarService.kt b/sidebar/app/src/main/java/com/libremobileos/sidebar/service/SidebarService.kt
+index 9ce3bf2..7793b3a 100644
+--- a/sidebar/app/src/main/java/com/libremobileos/sidebar/service/SidebarService.kt
++++ b/sidebar/app/src/main/java/com/libremobileos/sidebar/service/SidebarService.kt
+@@ -411,4 +411,25 @@ class SidebarService : Service(), SharedPreferences.OnSharedPreferenceChangeList
+             apply()
+         }
+     }
++
++    override fun onExpandTriggered(touchY: Float) {
++        // If not already showing, prepare the view and hide the handle
++        if (!isShowingSidebar) {
++            sidebarView.showView(initialY = touchY) // Add view (invisible)
++            isShowingSidebar = true
++        }
++
++        // Trigger the Morph Animation (Interruptible)
++        sidebarView.animateExpand()
++    }
++
++    override fun onCollapseTriggered() {
++        if (isShowingSidebar) {
++            // Trigger Morph Collapse
++            sidebarView.animateCollapse()
++            // sidebarView will call callback.onRemove() when animation finishes,
++            // which calls animateShowSideline(), but we can force it here for responsiveness
++            // isShowingSidebar = false // logic handled in onRemove
++        }
++    }
+ }
+diff --git a/sidebar/app/src/main/java/com/libremobileos/sidebar/service/SidebarView.kt b/sidebar/app/src/main/java/com/libremobileos/sidebar/service/SidebarView.kt
+index 548970e..233999e 100644
+--- a/sidebar/app/src/main/java/com/libremobileos/sidebar/service/SidebarView.kt
++++ b/sidebar/app/src/main/java/com/libremobileos/sidebar/service/SidebarView.kt
+@@ -11,6 +11,7 @@ import android.view.MotionEvent
+ import android.view.View
+ import android.view.WindowManager
+ import android.view.WindowManager.LayoutParams
++import android.view.animation.PathInterpolator
+ import androidx.compose.foundation.layout.fillMaxHeight
+ import androidx.compose.foundation.layout.wrapContentWidth
+ import androidx.compose.ui.Modifier
+@@ -45,157 +46,249 @@ class SidebarView(
+     override val savedStateRegistry get() = savedStateRegistryController.savedStateRegistry
+ 
+     private lateinit var composeView: View
+-    private var sidebarPositionX = 0
+-    private var sidebarPositionY = 0
+-    private var isShowing = false
+-    private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+-    private val layoutParams = LayoutParams()
+-    private val logger = Logger(TAG)
+-    private val handler = Handler()
+-
+-    private val sharedPrefs by lazy {
+-        context.getSharedPreferences(SidebarApplication.CONFIG, Context.MODE_PRIVATE)
+-    }
++        private var sidebarPositionX = 0
++        private var sidebarPositionY = 0
++        private var isShowing = false
++        private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
++        private val layoutParams = LayoutParams()
++        private val logger = Logger(TAG)
++        private val handler = Handler()
+ 
+-    companion object {
+-        private const val OFFSET_X = 90
+-        private const val PACKAGE = "com.libremobileos.freeform"
+-        private const val ACTION = "com.libremobileos.freeform.START_FREEFORM"
+-        private const val TAG = "SidebarView"
+-    }
++        // "HyperOS" style interpolator: Fast entry, smooth deceleration.
++        // Equivalent to CSS cubic-bezier(0.19, 1.0, 0.22, 1.0) or Qt OutExpo
++        private val morphInterpolator = PathInterpolator(0.19f, 1f, 0.22f, 1f)
+ 
+-    init {
+-        savedStateRegistryController.performRestore(null)
+-    }
++        private val sharedPrefs by lazy {
++            context.getSharedPreferences(SidebarApplication.CONFIG, Context.MODE_PRIVATE)
++        }
+ 
+-    private fun launchAppInFreeform(appInfo: AppInfo) {
+-        val intent = Intent(ACTION).apply {
+-            setPackage(PACKAGE)
+-            putExtra("packageName", appInfo.packageName)
+-            putExtra("activityName", appInfo.activityName)
+-            putExtra("userId", appInfo.userId)
++        companion object {
++            private const val OFFSET_X = 90
++            private const val PACKAGE = "com.libremobileos.freeform"
++            private const val ACTION = "com.libremobileos.freeform.START_FREEFORM"
++            private const val TAG = "SidebarView"
+         }
+-        context.sendBroadcastAsUser(intent, UserHandle(UserHandle.USER_CURRENT))
+-        removeView()
+-    }
+ 
+-    @SuppressLint("ClickableViewAccessibility")
+-    fun showView() {
+-        if (isShowing) return
++        init {
++            savedStateRegistryController.performRestore(null)
++        }
+ 
+-        if (lifecycle.currentState == Lifecycle.State.DESTROYED) {
+-            lifecycleRegistry = LifecycleRegistry(this)
++        private fun launchAppInFreeform(appInfo: AppInfo) {
++            val intent = Intent(ACTION).apply {
++                setPackage(PACKAGE)
++                putExtra("packageName", appInfo.packageName)
++                putExtra("activityName", appInfo.activityName)
++                putExtra("userId", appInfo.userId)
++            }
++            context.sendBroadcastAsUser(intent, UserHandle(UserHandle.USER_CURRENT))
++            // Use animate collapse instead of hard remove for smoother feel
++            animateCollapse()
+         }
+ 
+-        initComposeView()
++        /**
++         * Prepares the view and adds it to WindowManager, but does NOT fully animate it yet.
++         * @param initialY The raw Y coordinate of the touch, used to set the pivot point.
++         */
++        @SuppressLint("ClickableViewAccessibility")
++        fun showView(initialY: Float = -1f) {
++            if (isShowing) return
++
++                if (lifecycle.currentState == Lifecycle.State.DESTROYED) {
++                    lifecycleRegistry = LifecycleRegistry(this)
++                }
++
++                initComposeView()
+ 
+-        layoutParams.apply {
+-            type = LayoutParams.TYPE_APPLICATION_OVERLAY
+-            flags = LayoutParams.FLAG_LAYOUT_IN_SCREEN or
++                layoutParams.apply {
++                    type = LayoutParams.TYPE_APPLICATION_OVERLAY
++                    flags = LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                     LayoutParams.FLAG_HARDWARE_ACCELERATED
+-            privateFlags = LayoutParams.PRIVATE_FLAG_TRUSTED_OVERLAY or
+-                    LayoutParams.PRIVATE_FLAG_SYSTEM_APPLICATION_OVERLAY
+-            format = PixelFormat.RGBA_8888
+-            windowAnimations = android.R.style.Animation_Dialog
+-            layoutInDisplayCutoutMode = LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_NEVER
++                    privateFlags = LayoutParams.PRIVATE_FLAG_TRUSTED_OVERLAY or
++                        LayoutParams.PRIVATE_FLAG_SYSTEM_APPLICATION_OVERLAY
++                    format = PixelFormat.TRANSLUCENT
++                    // Disable default window animation to allow full control via ViewPropertyAnimator
++                    windowAnimations = 0
++                    layoutInDisplayCutoutMode = LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_NEVER
++                }
++
++                updateSidebarPosition()
++
++                // --- Morph Animation Setup ---
++
++                // 1. Calculate Side
++                // Assuming sidebarPositionX > 0 means Right side, < 0 means Left side
++                val isRightSide = sidebarPositionX > 0
++
++                // 2. Set Pivot X (Horizontal Origin)
++                // If Right: pivot from the right edge. If Left: pivot from the left edge.
++                // Since width is WRAP_CONTENT, we use a safe estimation or wait for layout.
++                // For immediate animation, 0f (Left) works. For Right, we need the width.
++                // We can use a post-action to ensure width is calculated,
++                // OR if you know the fixed width (e.g. ~80dp), hardcode it.
++                // Here we try to get measured width, defaulting to a reasonable estimate if 0.
++                composeView.pivotX = if (isRightSide) (composeView.width.takeIf { it > 0 }?.toFloat() ?: 200f) else 0f
++
++                // 3. Set Pivot Y (Vertical Origin)
++                // Force the animation to start from the vertical center of the sidebar panel.
++                // This ensures it expands symmetrically from the middle.
++                composeView.pivotY = layoutParams.height / 2f
++
++                // 4. Set Initial "Hidden" State
++                composeView.alpha = 0f
++                composeView.scaleX = 0.0f
++                composeView.scaleY = 0.0f
++
++                // Start slightly off-screen or offset for the "pop" effect
++                val startOffset = if (isRightSide) 150f else -150f
++                composeView.translationX = startOffset
++
++                composeView.setOnTouchListener { view, event ->
++                    logger.d("composeView: $event")
++                    if (event.action == MotionEvent.ACTION_UP) {
++                        // Tapping outside or on background closes it
++                        animateCollapse()
++                        true
++                    }
++                    false
++                }
++
++                handler.post {
++                    runCatching {
++                        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
++                        windowManager.addView(composeView, layoutParams)
++
++                        isShowing = true
++                    }.onFailure {
++                        logger.e("failed to add sidebar view: ", it)
++                    }
++                }
+         }
+ 
+-        updateSidebarPosition()
+-        composeView.translationX = sidebarPositionX * 1.0f * 200
+-        composeView.setOnTouchListener { view, event ->
+-            logger.d("composeView: $event")
+-            if (event.action == MotionEvent.ACTION_UP) {
+-                removeView()
+-                true
+-            }
+-            false
++        /**
++         * Smoothly expands the sidebar (Scale 0->1, Alpha 0->1)
++         * Safe to call multiple times (interruptible).
++         */
++        fun animateExpand() {
++            if (composeView.visibility != View.VISIBLE) composeView.visibility = View.VISIBLE
++
++                composeView.animate()
++                .alpha(1f)
++                .scaleX(1f)
++                .scaleY(1f)
++                .translationX(0f)
++                .setDuration(600)
++                .setInterpolator(morphInterpolator)
++                .start()
+         }
+ 
+-        handler.post {
+-            runCatching {
+-                lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
+-                windowManager.addView(composeView, layoutParams)
+-                composeView.animate().translationX(0f).setDuration(300).start()
+-                isShowing = true
+-            }.onFailure {
+-                logger.e("failed to add sidebar view: ", it)
+-            }
++        /**
++         * Smoothly collapses the sidebar and removes it from WindowManager when done.
++         * Safe to call multiple times (interruptible).
++         */
++        fun animateCollapse() {
++            if (!isShowing) return
++
++                val isRightSide = sidebarPositionX > 0
++                val endOffset = if (isRightSide) 150f else -150f
++
++                composeView.animate()
++                .alpha(0f)
++                .scaleX(0.0f)
++                .scaleY(0.0f)
++                .translationX(endOffset)
++                .setDuration(600)
++                .setInterpolator(morphInterpolator)
++                .withEndAction {
++                    removeViewInternal()
++                }
++                .start()
+         }
+-    }
+ 
+-    fun removeView(force: Boolean = false) {
+-        if (!isShowing && !force) return
+-
+-        logger.d("removeView")
+-        handler.post {
+-            runCatching {
+-                lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+-                windowManager.removeViewImmediate(composeView)
+-                callback.onRemove()
+-                isShowing = false
+-            }.onFailure {
+-                logger.e("failed to remove sidebar view: $it")
++        // Helper for immediate cleanup without logic checks, used by animation end
++        private fun removeViewInternal() {
++            handler.post {
++                runCatching {
++                    lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
++                    windowManager.removeViewImmediate(composeView)
++                    callback.onRemove()
++                    isShowing = false
++                }.onFailure {
++                    logger.e("failed to remove sidebar view internal: $it")
++                }
+             }
+         }
+-    }
+ 
+-    fun updateSidebarPosition() {
+-        val screenWidth = context.resources.displayMetrics.widthPixels
+-        val screenHeight = context.resources.displayMetrics.heightPixels
+-        val sidebarHeight = if (context.resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT) {
+-            screenHeight / 3
+-        } else {
+-            (screenHeight * 0.8f).roundToInt()
+-        }
++        fun removeView(force: Boolean = false) {
++            if (!isShowing && !force) return
+ 
+-        sidebarPositionX = sharedPrefs.getInt(SidebarService.SIDELINE_POSITION_X, 1)
+-        sidebarPositionY = if (context.resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT) {
+-            sharedPrefs.getInt(SidebarService.SIDELINE_POSITION_Y_PORTRAIT, -screenHeight / 6)
+-        } else {
+-            0
++                if (force) {
++                    // Immediate removal
++                    removeViewInternal()
++                } else {
++                    // Graceful animation
++                    animateCollapse()
++                }
+         }
+ 
+-        layoutParams.apply {
+-            width = LayoutParams.WRAP_CONTENT
+-            height = sidebarHeight
+-            x = sidebarPositionX * (screenWidth / 2 - OFFSET_X)
+-            y = sidebarPositionY
+-        }
++        fun updateSidebarPosition() {
++            val screenWidth = context.resources.displayMetrics.widthPixels
++            val screenHeight = context.resources.displayMetrics.heightPixels
++            val sidebarHeight = if (context.resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT) {
++                screenHeight / 3
++            } else {
++                (screenHeight * 0.8f).roundToInt()
++            }
+ 
+-        logger.d("updateSidebarPosition: posX=$sidebarPositionX posY=$sidebarPositionY" +
+-                " lp.x=${layoutParams.x} lp.y=${layoutParams.y} height=${layoutParams.height}")
++            sidebarPositionX = sharedPrefs.getInt(SidebarService.SIDELINE_POSITION_X, 1)
++            sidebarPositionY = if (context.resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT) {
++                sharedPrefs.getInt(SidebarService.SIDELINE_POSITION_Y_PORTRAIT, -screenHeight / 6)
++            } else {
++                0
++            }
+ 
+-        if (isShowing) {
+-            handler.post {
+-                runCatching {
+-                    windowManager.updateViewLayout(composeView, layoutParams)
+-                }.onFailure { e ->
+-                    logger.e("failed to updateViewLayout: ", e)
++            layoutParams.apply {
++                width = LayoutParams.WRAP_CONTENT
++                height = sidebarHeight
++                x = sidebarPositionX * (screenWidth / 2 - OFFSET_X)
++                y = sidebarPositionY
++            }
++
++            logger.d("updateSidebarPosition: posX=$sidebarPositionX posY=$sidebarPositionY" +
++            " lp.x=${layoutParams.x} lp.y=${layoutParams.y} height=${layoutParams.height}")
++
++            if (isShowing) {
++                handler.post {
++                    runCatching {
++                        windowManager.updateViewLayout(composeView, layoutParams)
++                        // Reset pivot if position changed, though tricky during active usage
++                        composeView.translationX = 0f
++                    }.onFailure { e ->
++                        logger.e("failed to updateViewLayout: ", e)
++                    }
+                 }
+             }
+         }
+-    }
+ 
+-    private fun initComposeView() {
+-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+-        composeView = ComposeView(context).apply {
+-            setViewTreeLifecycleOwner(this@SidebarView)
+-            setViewTreeSavedStateRegistryOwner(this@SidebarView)
+-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+-            setContent {
+-                SidebarTheme {
+-                    SidebarComposeView(
+-                        viewModel = viewModel,
+-                        launchApp = { launchAppInFreeform(it) },
+-                        closeSidebar = { removeView() },
+-                        modifier = Modifier
+-                            .fillMaxHeight()
+-                            .wrapContentWidth()
+-                    )
++        private fun initComposeView() {
++            lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
++            composeView = ComposeView(context).apply {
++                setViewTreeLifecycleOwner(this@SidebarView)
++                setViewTreeSavedStateRegistryOwner(this@SidebarView)
++                setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
++                setContent {
++                    SidebarTheme {
++                        SidebarComposeView(
++                            viewModel = viewModel,
++                            launchApp = { launchAppInFreeform(it) },
++                                           closeSidebar = { animateCollapse() }, // Use animation
++                                           modifier = Modifier
++                                           .fillMaxHeight()
++                                           .wrapContentWidth()
++                        )
++                    }
+                 }
+             }
+         }
+-    }
+ 
+     interface Callback {
+         fun onRemove()
+-- 
+2.54.0
+

@@ -1,0 +1,185 @@
+From 54e31642b110b1e0cdbada431a93c86aa67bfad1 Mon Sep 17 00:00:00 2001
+From: Hecheng Yu <kde-yyds@qq.com>
+Date: Sat, 23 May 2026 13:55:58 +0800
+Subject: [PATCH 3/6] Revert "sidebar: Implement gesture setting to open
+ sidebar drawer on tap"
+
+This reverts commit e99bd4610006538e21bac9aa85189de33caf29fb.
+---
+ .../sidebar/service/GestureListener.kt        |  6 ---
+ .../sidebar/service/MGestureManager.kt        |  5 --
+ .../sidebar/service/SidebarService.kt         |  8 ----
+ .../SidebarCustomizationSettingsPage.kt       | 46 -------------------
+ sidebar/app/src/main/res/values/strings.xml   |  3 --
+ 5 files changed, 68 deletions(-)
+
+diff --git a/sidebar/app/src/main/java/com/libremobileos/sidebar/service/GestureListener.kt b/sidebar/app/src/main/java/com/libremobileos/sidebar/service/GestureListener.kt
+index af0ed05..b24ebc3 100644
+--- a/sidebar/app/src/main/java/com/libremobileos/sidebar/service/GestureListener.kt
++++ b/sidebar/app/src/main/java/com/libremobileos/sidebar/service/GestureListener.kt
+@@ -64,16 +64,10 @@ class GestureListener(private val callback: Callback) : MGestureManager.MGesture
+         }
+     }
+ 
+-    override fun onSingleTapUp(e: MotionEvent): Boolean {
+-        callback.onSingleTapUp()
+-        return true
+-    }
+-
+     interface Callback {
+         fun showSidebar()
+         fun beginMoveSideline()
+         fun moveSideline(xChanged: Int, yChanged: Int, touchX: Int, touchY: Int)
+         fun endMoveSideline()
+-        fun onSingleTapUp()
+     }
+ }
+diff --git a/sidebar/app/src/main/java/com/libremobileos/sidebar/service/MGestureManager.kt b/sidebar/app/src/main/java/com/libremobileos/sidebar/service/MGestureManager.kt
+index 7c9f912..1c85677 100644
+--- a/sidebar/app/src/main/java/com/libremobileos/sidebar/service/MGestureManager.kt
++++ b/sidebar/app/src/main/java/com/libremobileos/sidebar/service/MGestureManager.kt
+@@ -23,7 +23,6 @@ class MGestureManager(context: Context, private val mListener: MGestureListener)
+         ): Boolean
+ 
+         fun onTouchEvent(event: MotionEvent)
+-        fun onSingleTapUp(e: MotionEvent): Boolean
+     }
+ 
+     enum class GestureEvent {
+@@ -79,10 +78,6 @@ class MGestureManager(context: Context, private val mListener: MGestureListener)
+                 )
+             } else return true
+         }
+-
+-        override fun onSingleTapUp(e: MotionEvent): Boolean {
+-            return mListener.onSingleTapUp(e)
+-        }
+     }
+ 
+     init {
+diff --git a/sidebar/app/src/main/java/com/libremobileos/sidebar/service/SidebarService.kt b/sidebar/app/src/main/java/com/libremobileos/sidebar/service/SidebarService.kt
+index 07cc27d..9ce3bf2 100644
+--- a/sidebar/app/src/main/java/com/libremobileos/sidebar/service/SidebarService.kt
++++ b/sidebar/app/src/main/java/com/libremobileos/sidebar/service/SidebarService.kt
+@@ -91,7 +91,6 @@ class SidebarService : Service(), SharedPreferences.OnSharedPreferenceChangeList
+         const val SIDEBAR_CORNER_RADIUS = "sidebar_corner_radius"
+         const val SIDEBAR_BACKGROUND_TRANSPARENCY = "sidebar_background_transparency"
+         const val SIDEBAR_SHOW_SHADOW = "sidebar_show_shadow"
+-        const val SIDEBAR_TAP_TO_OPEN = "sidebar_tap_to_open"
+ 
+         //是否展示侧边条
+         const val SIDELINE = "sideline"
+@@ -271,13 +270,6 @@ class SidebarService : Service(), SharedPreferences.OnSharedPreferenceChangeList
+         }
+     }
+ 
+-    override fun onSingleTapUp() {
+-        if (sharedPrefs.getBoolean(SIDEBAR_TAP_TO_OPEN, false)) {
+-            logger.d("onSingleTapUp: showing sidebar")
+-            showSidebar()
+-        }
+-    }
+-
+     private fun constrainY(y: Int): Int {
+         // Avoid moving sideline into statusbar or navbar region
+         val sbHeight = SystemBarUtils.getStatusBarHeight(this)
+diff --git a/sidebar/app/src/main/java/com/libremobileos/sidebar/ui/sidebar/SidebarCustomizationSettingsPage.kt b/sidebar/app/src/main/java/com/libremobileos/sidebar/ui/sidebar/SidebarCustomizationSettingsPage.kt
+index 6a11335..d27cb38 100644
+--- a/sidebar/app/src/main/java/com/libremobileos/sidebar/ui/sidebar/SidebarCustomizationSettingsPage.kt
++++ b/sidebar/app/src/main/java/com/libremobileos/sidebar/ui/sidebar/SidebarCustomizationSettingsPage.kt
+@@ -42,7 +42,6 @@ fun SidebarCustomizationSettingsPage(
+     var cornerRadius by remember { mutableStateOf(sharedPrefs.getFloat("sidebar_corner_radius", 24f)) }
+     var backgroundTransparency by remember { mutableStateOf(sharedPrefs.getFloat("sidebar_background_transparency", 0.80f)) }
+     var showShadow by remember { mutableStateOf(sharedPrefs.getBoolean("sidebar_show_shadow", true)) }
+-    var tapToOpen by remember { mutableStateOf(sharedPrefs.getBoolean("sidebar_tap_to_open", false)) }
+ 
+     CompositionLocalProvider(LocalNavController provides remember {
+         object : NavControllerWrapper {
+@@ -342,49 +341,6 @@ fun SidebarCustomizationSettingsPage(
+                     }
+                 }
+ 
+-                // Gesture Settings Section
+-                item {
+-                    Card(
+-                        modifier = Modifier
+-                            .fillMaxWidth()
+-                            .padding(bottom = 16.dp)
+-                    ) {
+-                        Column(
+-                            modifier = Modifier.padding(16.dp)
+-                        ) {
+-                            Text(
+-                                text = stringResource(R.string.sidebar_section_gestures),
+-                                style = MaterialTheme.typography.titleMedium,
+-                                modifier = Modifier.padding(bottom = 16.dp)
+-                            )
+-                            
+-                            // Tap to Open Toggle
+-                            Row(
+-                                modifier = Modifier.fillMaxWidth(),
+-                                verticalAlignment = Alignment.CenterVertically
+-                            ) {
+-                                Switch(
+-                                    checked = tapToOpen,
+-                                    onCheckedChange = { 
+-                                        tapToOpen = it
+-                                        sharedPrefs.edit().putBoolean("sidebar_tap_to_open", tapToOpen).apply()
+-                                        onSettingChanged()
+-                                    }
+-                                )
+-                                Spacer(modifier = Modifier.width(12.dp))
+-                                Column {
+-                                    Text(text = stringResource(R.string.sidebar_tap_to_open_title))
+-                                    Text(
+-                                        text = stringResource(R.string.sidebar_tap_to_open_summary),
+-                                        style = MaterialTheme.typography.bodySmall,
+-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+-                                    )
+-                                }
+-                            }
+-                        }
+-                    }
+-                }
+-
+                 // Reset Button
+                 item {
+                     OutlinedButton(
+@@ -401,7 +357,6 @@ fun SidebarCustomizationSettingsPage(
+                             cornerRadius = 24f
+                             backgroundTransparency = 0.80f
+                             showShadow = true
+-                            tapToOpen = false
+                             
+                             sharedPrefs.edit()
+                                 .putFloat("slider_transparency", transparency)
+@@ -415,7 +370,6 @@ fun SidebarCustomizationSettingsPage(
+                                 .putFloat("sidebar_corner_radius", cornerRadius)
+                                 .putFloat("sidebar_background_transparency", backgroundTransparency)
+                                 .putBoolean("sidebar_show_shadow", showShadow)
+-                                .putBoolean("sidebar_tap_to_open", tapToOpen)
+                                 .apply()
+                             onSettingChanged()
+                         },
+diff --git a/sidebar/app/src/main/res/values/strings.xml b/sidebar/app/src/main/res/values/strings.xml
+index 12b75ce..31f6d1e 100644
+--- a/sidebar/app/src/main/res/values/strings.xml
++++ b/sidebar/app/src/main/res/values/strings.xml
+@@ -21,7 +21,6 @@
+     <string name="sidebar_section_slider">Slider settings</string>
+     <string name="sidebar_section_layout">Layout settings</string>
+     <string name="sidebar_section_visual">Visual effects</string>
+-    <string name="sidebar_section_gestures">Gesture settings</string>
+ 
+     <!-- Slider settings -->
+     <string name="sidebar_transparency_value">Slider transparency: %1$.2f</string>
+@@ -48,6 +47,4 @@
+     <!-- Visual effects -->
+     <string name="sidebar_drop_shadow_title">Drop shadow</string>
+     <string name="sidebar_drop_shadow_summary">Add shadow effect to sidebar</string>
+-    <string name="sidebar_tap_to_open_title">Open drawer on tap</string>
+-    <string name="sidebar_tap_to_open_summary">Open the sidebar drawer when the slider is tapped</string>
+ </resources>
+-- 
+2.54.0
+

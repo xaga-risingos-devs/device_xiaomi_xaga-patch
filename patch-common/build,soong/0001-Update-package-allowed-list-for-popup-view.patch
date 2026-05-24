@@ -1,0 +1,24 @@
+From 070e28c48f04a7a4926b6d6f937769dd78ae3de1 Mon Sep 17 00:00:00 2001
+From: Hecheng Yu <kde-yyds@qq.com>
+Date: Fri, 8 May 2026 21:01:50 +0800
+Subject: [PATCH] Update package allowed list for popup view
+
+---
+ scripts/check_boot_jars/package_allowed_list.txt | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/scripts/check_boot_jars/package_allowed_list.txt b/scripts/check_boot_jars/package_allowed_list.txt
+index fe7da98..92080ed 100644
+--- a/scripts/check_boot_jars/package_allowed_list.txt
++++ b/scripts/check_boot_jars/package_allowed_list.txt
+@@ -320,3 +320,7 @@ com.camera.camera2.extensions.*
+ ###################################################
+ # Xiaomi Extensions
+ com.xiaomi.extensions.*
++
++# Pop-Up View
++org.rising
++org.rising.view
+-- 
+2.54.0
+

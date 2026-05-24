@@ -1,0 +1,138 @@
+From 9d51d3a885a97da735cc12bee40ae05ef31ad95d Mon Sep 17 00:00:00 2001
+From: Hecheng Yu <kde-yyds@qq.com>
+Date: Sat, 23 May 2026 13:51:42 +0800
+Subject: [PATCH 1/6] Revert "sidebar: Implement configurable swipe-to-open
+ gesture for sidebar"
+
+This reverts commit 67562f36a7d6d9751b6ef7f86a4b37dacfec214e.
+---
+ .../sidebar/service/GestureListener.kt        |  3 +-
+ .../sidebar/service/SidebarService.kt         |  8 -----
+ .../SidebarCustomizationSettingsPage.kt       | 29 -------------------
+ sidebar/app/src/main/res/values/strings.xml   |  2 --
+ 4 files changed, 1 insertion(+), 41 deletions(-)
+
+diff --git a/sidebar/app/src/main/java/com/libremobileos/sidebar/service/GestureListener.kt b/sidebar/app/src/main/java/com/libremobileos/sidebar/service/GestureListener.kt
+index 0644f8b..af0ed05 100644
+--- a/sidebar/app/src/main/java/com/libremobileos/sidebar/service/GestureListener.kt
++++ b/sidebar/app/src/main/java/com/libremobileos/sidebar/service/GestureListener.kt
+@@ -32,7 +32,7 @@ class GestureListener(private val callback: Callback) : MGestureManager.MGesture
+     ): Boolean {
+         if (null != gestureEvent) {
+             if (gestureEvent == MGestureManager.GestureEvent.SINGLE_GINGER_LEFT_SLIP || gestureEvent == MGestureManager.GestureEvent.SINGLE_GINGER_RIGHT_SLIP) {
+-                callback.onSwipeToOpen()
++                callback.showSidebar()
+             }
+             return true
+         }
+@@ -70,7 +70,6 @@ class GestureListener(private val callback: Callback) : MGestureManager.MGesture
+     }
+ 
+     interface Callback {
+-        fun onSwipeToOpen()
+         fun showSidebar()
+         fun beginMoveSideline()
+         fun moveSideline(xChanged: Int, yChanged: Int, touchX: Int, touchY: Int)
+diff --git a/sidebar/app/src/main/java/com/libremobileos/sidebar/service/SidebarService.kt b/sidebar/app/src/main/java/com/libremobileos/sidebar/service/SidebarService.kt
+index 3e14d6c..6e96b3d 100644
+--- a/sidebar/app/src/main/java/com/libremobileos/sidebar/service/SidebarService.kt
++++ b/sidebar/app/src/main/java/com/libremobileos/sidebar/service/SidebarService.kt
+@@ -96,7 +96,6 @@ class SidebarService : Service(), SharedPreferences.OnSharedPreferenceChangeList
+         const val SIDEBAR_BACKGROUND_TRANSPARENCY = "sidebar_background_transparency"
+         const val SIDEBAR_SHOW_SHADOW = "sidebar_show_shadow"
+         const val SIDEBAR_TAP_TO_OPEN = "sidebar_tap_to_open"
+-        const val SIDEBAR_SWIPE_TO_OPEN = "sidebar_swipe_to_open"
+         const val SIDEBAR_HIDE_ON_GAMESPACE = "sidebar_hide_on_gamespace"
+         const val ACTION_GAME_START = "io.chaldeaprjkt.gamespace.action.GAME_START"
+         const val ACTION_GAME_STOP = "io.chaldeaprjkt.gamespace.action.GAME_STOP"
+@@ -260,13 +259,6 @@ class SidebarService : Service(), SharedPreferences.OnSharedPreferenceChangeList
+         animateHideSideline()
+     }
+ 
+-    override fun onSwipeToOpen() {
+-        if (sharedPrefs.getBoolean(SIDEBAR_SWIPE_TO_OPEN, true)) {
+-            logger.d("onSwipeToOpen: showing sidebar")
+-            showSidebar()
+-        }
+-    }
+-
+     override fun beginMoveSideline() {
+         logger.d("beginMoveSideline")
+         layoutParams.apply {
+diff --git a/sidebar/app/src/main/java/com/libremobileos/sidebar/ui/sidebar/SidebarCustomizationSettingsPage.kt b/sidebar/app/src/main/java/com/libremobileos/sidebar/ui/sidebar/SidebarCustomizationSettingsPage.kt
+index 3068fdd..9332b08 100644
+--- a/sidebar/app/src/main/java/com/libremobileos/sidebar/ui/sidebar/SidebarCustomizationSettingsPage.kt
++++ b/sidebar/app/src/main/java/com/libremobileos/sidebar/ui/sidebar/SidebarCustomizationSettingsPage.kt
+@@ -43,7 +43,6 @@ fun SidebarCustomizationSettingsPage(
+     var backgroundTransparency by remember { mutableStateOf(sharedPrefs.getFloat("sidebar_background_transparency", 0.80f)) }
+     var showShadow by remember { mutableStateOf(sharedPrefs.getBoolean("sidebar_show_shadow", true)) }
+     var tapToOpen by remember { mutableStateOf(sharedPrefs.getBoolean("sidebar_tap_to_open", false)) }
+-    var swipeToOpen by remember { mutableStateOf(sharedPrefs.getBoolean("sidebar_swipe_to_open", true)) }
+     var hideOnGameSpace by remember { mutableStateOf(sharedPrefs.getBoolean("sidebar_hide_on_gamespace", false)) }
+ 
+     CompositionLocalProvider(LocalNavController provides remember {
+@@ -386,32 +385,6 @@ fun SidebarCustomizationSettingsPage(
+ 
+                             Spacer(modifier = Modifier.height(16.dp))
+ 
+-                            // Swipe to Open Toggle
+-                            Row(
+-                                modifier = Modifier.fillMaxWidth(),
+-                                verticalAlignment = Alignment.CenterVertically
+-                            ) {
+-                                Switch(
+-                                    checked = swipeToOpen,
+-                                    onCheckedChange = { 
+-                                        swipeToOpen = it
+-                                        sharedPrefs.edit().putBoolean("sidebar_swipe_to_open", swipeToOpen).apply()
+-                                        onSettingChanged()
+-                                    }
+-                                )
+-                                Spacer(modifier = Modifier.width(12.dp))
+-                                Column {
+-                                    Text(text = stringResource(R.string.sidebar_swipe_to_open_title))
+-                                    Text(
+-                                        text = stringResource(R.string.sidebar_swipe_to_open_summary),
+-                                        style = MaterialTheme.typography.bodySmall,
+-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+-                                    )
+-                                }
+-                            }
+-
+-                            Spacer(modifier = Modifier.height(16.dp))
+-
+                             // Hide on GameSpace Toggle
+                             Row(
+                                 modifier = Modifier.fillMaxWidth(),
+@@ -456,7 +429,6 @@ fun SidebarCustomizationSettingsPage(
+                             backgroundTransparency = 0.80f
+                             showShadow = true
+                             tapToOpen = false
+-                            swipeToOpen = true
+                             hideOnGameSpace = false
+                             
+                             sharedPrefs.edit()
+@@ -472,7 +444,6 @@ fun SidebarCustomizationSettingsPage(
+                                 .putFloat("sidebar_background_transparency", backgroundTransparency)
+                                 .putBoolean("sidebar_show_shadow", showShadow)
+                                 .putBoolean("sidebar_tap_to_open", tapToOpen)
+-                                .putBoolean("sidebar_swipe_to_open", swipeToOpen)
+                                 .putBoolean("sidebar_hide_on_gamespace", hideOnGameSpace)
+                                 .apply()
+                             onSettingChanged()
+diff --git a/sidebar/app/src/main/res/values/strings.xml b/sidebar/app/src/main/res/values/strings.xml
+index eb9a61b..ba88544 100644
+--- a/sidebar/app/src/main/res/values/strings.xml
++++ b/sidebar/app/src/main/res/values/strings.xml
+@@ -52,8 +52,6 @@
+     <!-- Miscellaneous -->
+     <string name="sidebar_tap_to_open_title">Open drawer on tap</string>
+     <string name="sidebar_tap_to_open_summary">Open the sidebar drawer when the slider is tapped</string>
+-    <string name="sidebar_swipe_to_open_title">Open drawer on swipe</string>
+-    <string name="sidebar_swipe_to_open_summary">Open the sidebar drawer when the slider is swiped horizontally</string>
+     <string name="sidebar_hide_on_gamespace_title">Hide when GameSpace is active</string>
+     <string name="sidebar_hide_on_gamespace_summary">Automatically hide the sidebar slider when a game is running with GameSpace</string>
+ </resources>
+-- 
+2.54.0
+

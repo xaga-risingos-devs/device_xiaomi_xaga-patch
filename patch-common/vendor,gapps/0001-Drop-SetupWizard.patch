@@ -1,0 +1,62 @@
+From b110a523c18dc826827b3e47cd655f1ca42eb5db Mon Sep 17 00:00:00 2001
+From: Hecheng Yu <kde-yyds@qq.com>
+Date: Thu, 16 Apr 2026 20:31:16 +0800
+Subject: [PATCH] Drop SetupWizard
+
+---
+ arm64/Android.bp        | 14 --------------
+ arm64/arm64-vendor.mk   |  1 -
+ common/common-vendor.mk |  3 +--
+ 3 files changed, 1 insertion(+), 17 deletions(-)
+
+diff --git a/arm64/Android.bp b/arm64/Android.bp
+index 5646a29..840d884 100644
+--- a/arm64/Android.bp
++++ b/arm64/Android.bp
+@@ -42,20 +42,6 @@ android_app_import {
+     product_specific: true,
+ }
+ 
+-android_app_import {
+-    name: "SetupWizard",
+-    owner: "gapps",
+-    apk: "proprietary/system_ext/priv-app/SetupWizard/SetupWizard.apk",
+-    overrides: ["Provision"],
+-    preprocessed: true,
+-    presigned: true,
+-    dex_preopt: {
+-        enabled: false,
+-    },
+-    privileged: true,
+-    system_ext_specific: true,
+-}
+-
+ android_app_import {
+     name: "SpeechServicesByGoogle",
+     owner: "gapps",
+diff --git a/arm64/arm64-vendor.mk b/arm64/arm64-vendor.mk
+index af0154a..37f57d8 100644
+--- a/arm64/arm64-vendor.mk
++++ b/arm64/arm64-vendor.mk
+@@ -12,7 +12,6 @@ PRODUCT_PACKAGES += \
+ ifeq ($(TARGET_IS_GROUPER),)
+ PRODUCT_PACKAGES += \
+     MarkupGoogle_v2 \
+-    SetupWizard \
+     SpeechServicesByGoogle \
+     Velvet \
+     talkback
+diff --git a/common/common-vendor.mk b/common/common-vendor.mk
+index 07cb153..0035cde 100644
+--- a/common/common-vendor.mk
++++ b/common/common-vendor.mk
+@@ -40,5 +40,4 @@ PRODUCT_SOONG_NAMESPACES += \
+ PRODUCT_PACKAGES += \
+     GmsOverlay \
+     GmsSettingsOverlay \
+-    GmsSettingsProviderOverlay \
+-    GmsSetupWizardOverlay
++    GmsSettingsProviderOverlay
+-- 
+2.53.0
+

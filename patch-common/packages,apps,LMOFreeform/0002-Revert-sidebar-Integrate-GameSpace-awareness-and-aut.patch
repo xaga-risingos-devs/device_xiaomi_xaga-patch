@@ -1,0 +1,305 @@
+From 64a8ca9d537ac8bc14637c91e1706499936e2edb Mon Sep 17 00:00:00 2001
+From: Hecheng Yu <kde-yyds@qq.com>
+Date: Sat, 23 May 2026 13:55:53 +0800
+Subject: [PATCH 2/6] Revert "sidebar: Integrate GameSpace awareness and
+ auto-hide support"
+
+This reverts commit 0e345c42f63a50ce90961207e21293765280aab3.
+---
+ sidebar/app/src/main/AndroidManifest.xml      | 10 ----
+ .../sidebar/receiver/GameSpaceReceiver.kt     | 29 ----------
+ .../sidebar/service/SidebarService.kt         | 58 +------------------
+ .../SidebarCustomizationSettingsPage.kt       | 33 +----------
+ sidebar/app/src/main/res/values/strings.xml   |  6 +-
+ 5 files changed, 4 insertions(+), 132 deletions(-)
+ delete mode 100644 sidebar/app/src/main/java/com/libremobileos/sidebar/receiver/GameSpaceReceiver.kt
+
+diff --git a/sidebar/app/src/main/AndroidManifest.xml b/sidebar/app/src/main/AndroidManifest.xml
+index e863f5b..1868bc9 100644
+--- a/sidebar/app/src/main/AndroidManifest.xml
++++ b/sidebar/app/src/main/AndroidManifest.xml
+@@ -14,7 +14,6 @@
+     <uses-permission android:name="android.permission.ACCESS_HIDDEN_PROFILES"/>
+     <uses-permission android:name="android.permission.GET_TASKS" />
+     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
+-    <uses-permission android:name="android.permission.MANAGE_GAME_MODE" />
+ 
+     <application
+         android:name=".app.SidebarApplication"
+@@ -67,14 +66,5 @@
+                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+             </intent-filter>
+         </receiver>
+-
+-        <receiver
+-            android:name=".receiver.GameSpaceReceiver"
+-            android:exported="true">
+-            <intent-filter>
+-                <action android:name="io.chaldeaprjkt.gamespace.action.GAME_START" />
+-                <action android:name="io.chaldeaprjkt.gamespace.action.GAME_STOP" />
+-            </intent-filter>
+-        </receiver>
+     </application>
+ </manifest>
+diff --git a/sidebar/app/src/main/java/com/libremobileos/sidebar/receiver/GameSpaceReceiver.kt b/sidebar/app/src/main/java/com/libremobileos/sidebar/receiver/GameSpaceReceiver.kt
+deleted file mode 100644
+index 2612d1e..0000000
+--- a/sidebar/app/src/main/java/com/libremobileos/sidebar/receiver/GameSpaceReceiver.kt
++++ /dev/null
+@@ -1,29 +0,0 @@
+-/*
+- * SPDX-FileCopyrightText: 2026 kenway214
+- * SPDX-License-Identifier: Apache-2.0
+- */
+-
+-package com.libremobileos.sidebar.receiver
+-
+-import android.content.BroadcastReceiver
+-import android.content.Context
+-import android.content.Intent
+-import android.os.UserHandle
+-import com.libremobileos.sidebar.service.SidebarService
+-import com.libremobileos.sidebar.utils.Logger
+-
+-class GameSpaceReceiver : BroadcastReceiver() {
+-    private val logger = Logger(TAG)
+-
+-    companion object {
+-        private const val TAG = "GameSpaceReceiver"
+-    }
+-
+-    override fun onReceive(context: Context, intent: Intent) {
+-        logger.d("onReceive: ${intent.action}")
+-        val serviceIntent = Intent(context, SidebarService::class.java).apply {
+-            action = intent.action
+-        }
+-        context.startServiceAsUser(serviceIntent, UserHandle.CURRENT)
+-    }
+-}
+diff --git a/sidebar/app/src/main/java/com/libremobileos/sidebar/service/SidebarService.kt b/sidebar/app/src/main/java/com/libremobileos/sidebar/service/SidebarService.kt
+index 6e96b3d..07cc27d 100644
+--- a/sidebar/app/src/main/java/com/libremobileos/sidebar/service/SidebarService.kt
++++ b/sidebar/app/src/main/java/com/libremobileos/sidebar/service/SidebarService.kt
+@@ -4,10 +4,8 @@ import android.annotation.SuppressLint
+ import android.app.IActivityManager
+ import android.app.Service
+ import android.app.UserSwitchObserver
+-import android.content.BroadcastReceiver
+ import android.content.Context
+ import android.content.Intent
+-import android.content.IntentFilter
+ import android.content.SharedPreferences
+ import android.content.res.Configuration
+ import android.graphics.PixelFormat
+@@ -68,8 +66,6 @@ class SidebarService : Service(), SharedPreferences.OnSharedPreferenceChangeList
+         }
+     }
+ 
+-    private var isGameSpaceActive = false
+-
+     private val isPortrait: Boolean
+         get() = resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT
+ 
+@@ -96,9 +92,6 @@ class SidebarService : Service(), SharedPreferences.OnSharedPreferenceChangeList
+         const val SIDEBAR_BACKGROUND_TRANSPARENCY = "sidebar_background_transparency"
+         const val SIDEBAR_SHOW_SHADOW = "sidebar_show_shadow"
+         const val SIDEBAR_TAP_TO_OPEN = "sidebar_tap_to_open"
+-        const val SIDEBAR_HIDE_ON_GAMESPACE = "sidebar_hide_on_gamespace"
+-        const val ACTION_GAME_START = "io.chaldeaprjkt.gamespace.action.GAME_START"
+-        const val ACTION_GAME_STOP = "io.chaldeaprjkt.gamespace.action.GAME_STOP"
+ 
+         //是否展示侧边条
+         const val SIDELINE = "sideline"
+@@ -128,23 +121,7 @@ class SidebarService : Service(), SharedPreferences.OnSharedPreferenceChangeList
+         sharedPrefs = application.applicationContext.getSharedPreferences(SidebarApplication.CONFIG, Context.MODE_PRIVATE)
+         sharedPrefs.registerOnSharedPreferenceChangeListener(this)
+         iActivityManager.registerUserSwitchObserver(userSwitchObserver, TAG)
+-        
+         serviceStarted = true
+-        
+-        intent?.action?.let { action ->
+-            when (action) {
+-                ACTION_GAME_START -> {
+-                    logger.d("onStartCommand: GameSpace started")
+-                    isGameSpaceActive = true
+-                    updateSidebarVisibility()
+-                }
+-                ACTION_GAME_STOP -> {
+-                    logger.d("onStartCommand: GameSpace stopped")
+-                    isGameSpaceActive = false
+-                    updateSidebarVisibility()
+-                }
+-            }
+-        }
+ 
+         sidebarView = SidebarView(this@SidebarService, viewModel, object : SidebarView.Callback {
+             override fun onRemove() {
+@@ -156,8 +133,7 @@ class SidebarService : Service(), SharedPreferences.OnSharedPreferenceChangeList
+                 
+                 logger.d("onRemove - masterEnabled: $masterEnabled, autoEnabled: $autoEnabled, shouldShowService: $shouldShowService, isShowingSideline: $isShowingSideline")
+                 
+-                val hideOnGameSpace = sharedPrefs.getBoolean(SIDEBAR_HIDE_ON_GAMESPACE, false)
+-                if (shouldShowService && isShowingSideline && !(isGameSpaceActive && hideOnGameSpace)) {
++                if (shouldShowService && isShowingSideline) {
+                     sideLineView.animate().cancel()
+                     animateShowSideline()
+                 }
+@@ -246,9 +222,6 @@ class SidebarService : Service(), SharedPreferences.OnSharedPreferenceChangeList
+             SIDEBAR_COLUMNS, SIDEBAR_ICON_SIZE, SIDEBAR_ICON_PADDING, SIDEBAR_COLUMN_SPACING, SIDEBAR_CORNER_RADIUS, SIDEBAR_BACKGROUND_TRANSPARENCY, SIDEBAR_SHOW_SHADOW -> {
+                 logger.d("Sidebar appearance setting changed: $key")
+             }
+-            SIDEBAR_HIDE_ON_GAMESPACE -> {
+-                updateSidebarVisibility()
+-            }
+         }
+     }
+ 
+@@ -334,10 +307,6 @@ class SidebarService : Service(), SharedPreferences.OnSharedPreferenceChangeList
+     @SuppressLint("ClickableViewAccessibility")
+     private fun showView() {
+         if (isShowingSideline) return
+-        if (isGameSpaceActive && sharedPrefs.getBoolean(SIDEBAR_HIDE_ON_GAMESPACE, false)) {
+-            logger.d("showView: GameSpace is active and hide toggle is on, skipping")
+-            return
+-        }
+ 
+         logger.d("showView")
+ 
+@@ -434,31 +403,6 @@ class SidebarService : Service(), SharedPreferences.OnSharedPreferenceChangeList
+         isShowingSideline = false
+     }
+ 
+-    private fun updateSidebarVisibility() {
+-        if (!sharedPrefs.getBoolean(SIDEBAR_HIDE_ON_GAMESPACE, false)) {
+-            if (!isGameSpaceActive) {
+-                val masterEnabled = sharedPrefs.getBoolean(SIDELINE, false)
+-                val autoEnabled = sharedPrefs.getBoolean(SidebarMonitorService.KEY_AUTO_ENABLED_TEMP, false)
+-                if (masterEnabled || autoEnabled) {
+-                    showView()
+-                }
+-            }
+-            return
+-        }
+-
+-        if (isGameSpaceActive) {
+-            logger.d("updateSidebarVisibility: GameSpace active, removing view")
+-            removeView()
+-        } else {
+-            logger.d("updateSidebarVisibility: GameSpace stopped, restoring view if needed")
+-            val masterEnabled = sharedPrefs.getBoolean(SIDELINE, false)
+-            val autoEnabled = sharedPrefs.getBoolean(SidebarMonitorService.KEY_AUTO_ENABLED_TEMP, false)
+-            if (masterEnabled || autoEnabled) {
+-                showView()
+-            }
+-        }
+-    }
+-
+     private fun animateHideSideline() {
+         logger.d("animateHideSideline")
+         sideLineView.animate().translationX(sidelinePositionX * 1.0f * getSliderWidth()).setDuration(300).start()
+diff --git a/sidebar/app/src/main/java/com/libremobileos/sidebar/ui/sidebar/SidebarCustomizationSettingsPage.kt b/sidebar/app/src/main/java/com/libremobileos/sidebar/ui/sidebar/SidebarCustomizationSettingsPage.kt
+index 9332b08..6a11335 100644
+--- a/sidebar/app/src/main/java/com/libremobileos/sidebar/ui/sidebar/SidebarCustomizationSettingsPage.kt
++++ b/sidebar/app/src/main/java/com/libremobileos/sidebar/ui/sidebar/SidebarCustomizationSettingsPage.kt
+@@ -43,7 +43,6 @@ fun SidebarCustomizationSettingsPage(
+     var backgroundTransparency by remember { mutableStateOf(sharedPrefs.getFloat("sidebar_background_transparency", 0.80f)) }
+     var showShadow by remember { mutableStateOf(sharedPrefs.getBoolean("sidebar_show_shadow", true)) }
+     var tapToOpen by remember { mutableStateOf(sharedPrefs.getBoolean("sidebar_tap_to_open", false)) }
+-    var hideOnGameSpace by remember { mutableStateOf(sharedPrefs.getBoolean("sidebar_hide_on_gamespace", false)) }
+ 
+     CompositionLocalProvider(LocalNavController provides remember {
+         object : NavControllerWrapper {
+@@ -343,7 +342,7 @@ fun SidebarCustomizationSettingsPage(
+                     }
+                 }
+ 
+-                // Miscellaneous Section
++                // Gesture Settings Section
+                 item {
+                     Card(
+                         modifier = Modifier
+@@ -354,7 +353,7 @@ fun SidebarCustomizationSettingsPage(
+                             modifier = Modifier.padding(16.dp)
+                         ) {
+                             Text(
+-                                text = stringResource(R.string.sidebar_section_miscellaneous),
++                                text = stringResource(R.string.sidebar_section_gestures),
+                                 style = MaterialTheme.typography.titleMedium,
+                                 modifier = Modifier.padding(bottom = 16.dp)
+                             )
+@@ -382,32 +381,6 @@ fun SidebarCustomizationSettingsPage(
+                                     )
+                                 }
+                             }
+-
+-                            Spacer(modifier = Modifier.height(16.dp))
+-
+-                            // Hide on GameSpace Toggle
+-                            Row(
+-                                modifier = Modifier.fillMaxWidth(),
+-                                verticalAlignment = Alignment.CenterVertically
+-                            ) {
+-                                Switch(
+-                                    checked = hideOnGameSpace,
+-                                    onCheckedChange = { 
+-                                        hideOnGameSpace = it
+-                                        sharedPrefs.edit().putBoolean("sidebar_hide_on_gamespace", hideOnGameSpace).apply()
+-                                        onSettingChanged()
+-                                    }
+-                                )
+-                                Spacer(modifier = Modifier.width(12.dp))
+-                                Column {
+-                                    Text(text = stringResource(R.string.sidebar_hide_on_gamespace_title))
+-                                    Text(
+-                                        text = stringResource(R.string.sidebar_hide_on_gamespace_summary),
+-                                        style = MaterialTheme.typography.bodySmall,
+-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+-                                    )
+-                                }
+-                            }
+                         }
+                     }
+                 }
+@@ -429,7 +402,6 @@ fun SidebarCustomizationSettingsPage(
+                             backgroundTransparency = 0.80f
+                             showShadow = true
+                             tapToOpen = false
+-                            hideOnGameSpace = false
+                             
+                             sharedPrefs.edit()
+                                 .putFloat("slider_transparency", transparency)
+@@ -444,7 +416,6 @@ fun SidebarCustomizationSettingsPage(
+                                 .putFloat("sidebar_background_transparency", backgroundTransparency)
+                                 .putBoolean("sidebar_show_shadow", showShadow)
+                                 .putBoolean("sidebar_tap_to_open", tapToOpen)
+-                                .putBoolean("sidebar_hide_on_gamespace", hideOnGameSpace)
+                                 .apply()
+                             onSettingChanged()
+                         },
+diff --git a/sidebar/app/src/main/res/values/strings.xml b/sidebar/app/src/main/res/values/strings.xml
+index ba88544..12b75ce 100644
+--- a/sidebar/app/src/main/res/values/strings.xml
++++ b/sidebar/app/src/main/res/values/strings.xml
+@@ -21,7 +21,7 @@
+     <string name="sidebar_section_slider">Slider settings</string>
+     <string name="sidebar_section_layout">Layout settings</string>
+     <string name="sidebar_section_visual">Visual effects</string>
+-    <string name="sidebar_section_miscellaneous">Miscellaneous</string>
++    <string name="sidebar_section_gestures">Gesture settings</string>
+ 
+     <!-- Slider settings -->
+     <string name="sidebar_transparency_value">Slider transparency: %1$.2f</string>
+@@ -48,10 +48,6 @@
+     <!-- Visual effects -->
+     <string name="sidebar_drop_shadow_title">Drop shadow</string>
+     <string name="sidebar_drop_shadow_summary">Add shadow effect to sidebar</string>
+-    
+-    <!-- Miscellaneous -->
+     <string name="sidebar_tap_to_open_title">Open drawer on tap</string>
+     <string name="sidebar_tap_to_open_summary">Open the sidebar drawer when the slider is tapped</string>
+-    <string name="sidebar_hide_on_gamespace_title">Hide when GameSpace is active</string>
+-    <string name="sidebar_hide_on_gamespace_summary">Automatically hide the sidebar slider when a game is running with GameSpace</string>
+ </resources>
+-- 
+2.54.0
+

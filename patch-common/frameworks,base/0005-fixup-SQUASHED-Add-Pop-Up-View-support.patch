@@ -1,0 +1,324 @@
+From 1b1689e8fcde7b3716ef59f1c4b3684ce8e41e78 Mon Sep 17 00:00:00 2001
+From: ruyue <ruyueee@outlook.com>
+Date: Fri, 1 May 2026 18:29:01 +0800
+Subject: [PATCH 5/5] fixup! [SQUASHED]: Add Pop-Up View support
+
+Change-Id: Ic5318e7bf795c1634bdc76c311c0ffa8c5ae0fbd
+---
+ .../wm/PinnedWindowOverlayController.java     | 125 +++++++++++-------
+ .../server/wm/PopUpAnimationController.java   |  16 ++-
+ .../server/wm/TaskWindowSurfaceInfo.java      |  22 ++-
+ 3 files changed, 101 insertions(+), 62 deletions(-)
+
+diff --git a/services/core/java/com/android/server/wm/PinnedWindowOverlayController.java b/services/core/java/com/android/server/wm/PinnedWindowOverlayController.java
+index 8820094f3..55b719af0 100644
+--- a/services/core/java/com/android/server/wm/PinnedWindowOverlayController.java
++++ b/services/core/java/com/android/server/wm/PinnedWindowOverlayController.java
+@@ -75,6 +75,16 @@ class PinnedWindowOverlayController {
+     private PinnedWindowDismissView mDismissView;
+     private boolean mIsInRemoveBound;
+     private boolean mIsDockedToEdge = false;
++    private volatile int mOverlayGeneration;
++
++    private static class OverlayPosition {
++        int generation;
++        int left;
++        int top;
++        int taskWidth;
++        int taskHeight;
++        float scale;
++    }
+ 
+     private static class InstanceHolder {
+         private static final PinnedWindowOverlayController INSTANCE = new PinnedWindowOverlayController();
+@@ -118,7 +128,7 @@ class PinnedWindowOverlayController {
+                     hideDismissViewInternal(msg.arg1 == 1);
+                     break;
+                 case MSG_UPDATE_OVERLAY_POSITION:
+-                    updateOverlayPositionInternal((float[]) msg.obj);
++                    updateOverlayPositionInternal((OverlayPosition) msg.obj);
+                     break;
+             }
+         }
+@@ -187,11 +197,17 @@ class PinnedWindowOverlayController {
+         if (mTask == task) {
+             return;
+         }
++        mOverlayGeneration++;
++        mHandler.removeMessages(MSG_UPDATE_OVERLAY_POSITION);
+         if (task == null && mTask != null) {
+             mHandler.removeMessages(MSG_ADD_OVERLAY_WINDOW);
+             mHandler.removeMessages(MSG_UPDATE_OVERLAY_WINDOW);
++            mHandler.removeMessages(MSG_HIDE_OVERLAY_WINDOW);
+             mHandler.sendEmptyMessage(MSG_REMOVE_OVERLAY_WINDOW);
+             hideDismissView(false);
++        } else if (task != null) {
++            mHandler.removeMessages(MSG_REMOVE_OVERLAY_WINDOW);
++            mHandler.removeMessages(MSG_HIDE_OVERLAY_WINDOW);
+         }
+         mTask = task;
+         mTaskWindowSurfaceInfo = getTaskWindowSurfaceInfo();
+@@ -342,12 +358,13 @@ class PinnedWindowOverlayController {
+             return;
+         }
+         if (mTaskWindowSurfaceInfo != null && mView == null) {
+-            mView = (PinnedWindowOverlayView) LayoutInflater.from(mContext)
++            final PinnedWindowOverlayView view = (PinnedWindowOverlayView) LayoutInflater.from(mContext)
+                     .inflate(R.layout.pinned_window_overlay, null);
+-            mView.setController(this);
+-            mView.setTask(mTask);
++            view.setController(this);
++            view.setTask(mTask);
+             final Rect taskBound = mTaskWindowSurfaceInfo.getTaskWindowSurfaceBounds();
+-            setUpWindow(taskBound);
++            setUpWindow(view, taskBound);
++            mView = view;
+             mBound.set(taskBound);
+         }
+         if (mView != null) {
+@@ -355,31 +372,32 @@ class PinnedWindowOverlayController {
+         }
+     }
+ 
+-    private void setUpWindow(Rect taskBound) {
+-        mParams = new LayoutParams();
+-        mParams.type = LayoutParams.TYPE_APPLICATION_OVERLAY;
+-        mParams.format = PixelFormat.RGBA_8888;
+-        mParams.flags = LayoutParams.FLAG_NOT_FOCUSABLE |
++    private void setUpWindow(PinnedWindowOverlayView view, Rect taskBound) {
++        final LayoutParams params = new LayoutParams();
++        params.type = LayoutParams.TYPE_APPLICATION_OVERLAY;
++        params.format = PixelFormat.RGBA_8888;
++        params.flags = LayoutParams.FLAG_NOT_FOCUSABLE |
+                         LayoutParams.FLAG_NOT_TOUCH_MODAL |
+                         LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH |
+                         LayoutParams.FLAG_SHOW_WHEN_LOCKED;
+-        mParams.privateFlags = LayoutParams.SYSTEM_FLAG_SHOW_FOR_ALL_USERS |
++        params.privateFlags = LayoutParams.SYSTEM_FLAG_SHOW_FOR_ALL_USERS |
+                                LayoutParams.PRIVATE_FLAG_TRUSTED_OVERLAY;
+-        mParams.layoutInDisplayCutoutMode = LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+-        mParams.setFitInsetsTypes(0);
+-        mParams.gravity = Gravity.LEFT | Gravity.TOP;
+-        mParams.setTitle(WIN_TITLE);
++        params.layoutInDisplayCutoutMode = LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
++        params.setFitInsetsTypes(0);
++        params.gravity = Gravity.LEFT | Gravity.TOP;
++        params.setTitle(WIN_TITLE);
+ 
+         if (mWindowManager != null) {
+-            mParams.x = taskBound.left;
+-            mParams.y = taskBound.top;
+-            mParams.width = taskBound.width();
+-            mParams.height = taskBound.height();
++            params.x = taskBound.left;
++            params.y = taskBound.top;
++            params.width = Math.max(1, taskBound.width());
++            params.height = Math.max(1, taskBound.height());
+             if (DEBUG_POP_UP) {
+                 Slog.d(TAG, "addView: bound = " + taskBound);
+             }
+-            mWindowManager.addView(mView, mParams);
+-            final WindowInsetsController insetsController = mView.getWindowInsetsController();
++            mWindowManager.addView(view, params);
++            mParams = params;
++            final WindowInsetsController insetsController = view.getWindowInsetsController();
+             if (insetsController != null) {
+                 insetsController.hide(WindowInsets.Type.statusBars());
+                 insetsController.hide(WindowInsets.Type.navigationBars());
+@@ -388,17 +406,24 @@ class PinnedWindowOverlayController {
+     }
+ 
+     private void updateView() {
+-        if (mTaskWindowSurfaceInfo == null) {
++        if (mTaskWindowSurfaceInfo == null || mParams == null) {
+             return;
+         }
+         final Rect taskBound = mTaskWindowSurfaceInfo.getTaskWindowSurfaceBounds();
+-        if (mView != null && !mBound.equals(taskBound) && mWindowManager != null) {
++        if (mView != null && mView.isAttachedToWindow() && !mBound.equals(taskBound)
++                && mWindowManager != null) {
+             mBound.set(taskBound);
+             mParams.x = taskBound.left;
+             mParams.y = taskBound.top;
+-            mParams.width = taskBound.width();
+-            mParams.height = taskBound.height();
+-            mWindowManager.updateViewLayout(mView, mParams);
++            mParams.width = Math.max(1, taskBound.width());
++            mParams.height = Math.max(1, taskBound.height());
++            try {
++                mWindowManager.updateViewLayout(mView, mParams);
++            } catch (Exception e) {
++                if (DEBUG_POP_UP) {
++                    Slog.w(TAG, "updateView failed", e);
++                }
++            }
+         }
+         if (mView != null) {
+             mView.setVisibility(View.VISIBLE);
+@@ -406,39 +431,47 @@ class PinnedWindowOverlayController {
+     }
+ 
+     private void removeOverlayViewInternal() {
+-        if (mView != null && mWindowManager != null) {
++        final View view = mView;
++        mView = null;
++        mParams = null;
++        mHandler.removeMessages(MSG_UPDATE_OVERLAY_POSITION);
++        if (view != null && mWindowManager != null) {
+             try {
+-                mWindowManager.removeView(mView);
++                mWindowManager.removeViewImmediate(view);
+             } catch (Exception e) {
+                 if (DEBUG_POP_UP) {
+                     Slog.w(TAG, "removeOverlayViewInternal failed", e);
+                 }
+             }
+-            mView = null;
+         }
+         mBound.setEmpty();
+     }
+ 
+     void updateOverlayPosition(int left, int top, int taskWidth, int taskHeight, float scale) {
+-        // Send message to handler to avoid deadlock with WindowManager
+-        // Store the parameters in a float array: [left, top, taskWidth, taskHeight, scale]
+-        final float[] params = new float[] { left, top, taskWidth, taskHeight, scale };
+-        mHandler.obtainMessage(MSG_UPDATE_OVERLAY_POSITION, params).sendToTarget();
+-    }
+-
+-    private void updateOverlayPositionInternal(float[] params) {
+-        if (mView == null || mWindowManager == null || params == null || params.length < 5) {
++        if (mTask == null) {
++            return;
++        }
++        final OverlayPosition position = new OverlayPosition();
++        position.generation = mOverlayGeneration;
++        position.left = left;
++        position.top = top;
++        position.taskWidth = taskWidth;
++        position.taskHeight = taskHeight;
++        position.scale = scale;
++        mHandler.removeMessages(MSG_UPDATE_OVERLAY_POSITION);
++        mHandler.obtainMessage(MSG_UPDATE_OVERLAY_POSITION, position).sendToTarget();
++    }
++
++    private void updateOverlayPositionInternal(OverlayPosition position) {
++        if (position == null || position.generation != mOverlayGeneration
++                || mView == null || mParams == null || mWindowManager == null
++                || !mView.isAttachedToWindow()) {
+             return;
+         }
+-        final int left = (int) params[0];
+-        final int top = (int) params[1];
+-        final int taskWidth = (int) params[2];
+-        final int taskHeight = (int) params[3];
+-        final float scale = params[4];
+-        final int newWidth = (int) (taskWidth * scale);
+-        final int newHeight = (int) (taskHeight * scale);
+-        mParams.x = left;
+-        mParams.y = top;
++        final int newWidth = Math.max(1, (int) (position.taskWidth * position.scale));
++        final int newHeight = Math.max(1, (int) (position.taskHeight * position.scale));
++        mParams.x = position.left;
++        mParams.y = position.top;
+         mParams.width = newWidth;
+         mParams.height = newHeight;
+         try {
+diff --git a/services/core/java/com/android/server/wm/PopUpAnimationController.java b/services/core/java/com/android/server/wm/PopUpAnimationController.java
+index d2d1f5341..a5e57c477 100644
+--- a/services/core/java/com/android/server/wm/PopUpAnimationController.java
++++ b/services/core/java/com/android/server/wm/PopUpAnimationController.java
+@@ -86,6 +86,7 @@ class PopUpAnimationController {
+     private boolean mIsCancelling;
+     private boolean mIsFromLeaveButton;
+     private float mLastAnimatingScale;
++    private int mRunningSpringAnimations;
+ 
+     private SpringAnimation mSpringAnimationX;
+     private SpringAnimation mSpringAnimationY;
+@@ -502,6 +503,7 @@ class PopUpAnimationController {
+     private void startAnimations() {
+         mSpringAnimationX = createSpringAnimation(mValueHolderX, mEndPos.x, mVelX);
+         mSpringAnimationY = createSpringAnimation(mValueHolderY, mEndPos.y, mVelY);
++        mRunningSpringAnimations = 2;
+         mSpringAnimationX.start();
+         mSpringAnimationY.start();
+         updateSpringAnimationPosition();
+@@ -527,9 +529,17 @@ class PopUpAnimationController {
+         final SpringAnimation springAnimation = new SpringAnimation(valueHolder, velocity);
+         springAnimation.setStartVelocity(velocity).setSpring(springForce)
+                 .addEndListener((anim, canceled, val, vel) -> {
+-                    final int x = (int) mValueHolderX.getValue();
+-                    final int y = (int) mValueHolderY.getValue();
++                    final boolean finished;
+                     synchronized (mLock) {
++                        if (mRunningSpringAnimations > 0) {
++                            mRunningSpringAnimations--;
++                        }
++                        finished = mRunningSpringAnimations == 0;
++                        if (!finished) {
++                            return;
++                        }
++                        final int x = mEndPos.x;
++                        final int y = mEndPos.y;
+                         if (DEBUG_POP_UP) {
+                             Slog.d(TAG, "SpringAnimation: onAnimationEnd mIsAnimating=" + mIsAnimating);
+                         }
+@@ -549,7 +559,7 @@ class PopUpAnimationController {
+                     }
+                     if (!mIsCancelling) {
+                         PinnedWindowOverlayController.getInstance().updateOverlayPosition(
+-                                x, y, mBoundWidth, mBoundHeight, mWindowScale);
++                                mEndPos.x, mEndPos.y, mBoundWidth, mBoundHeight, mWindowScale);
+                     }
+                 });
+         return springAnimation;
+diff --git a/services/core/java/com/android/server/wm/TaskWindowSurfaceInfo.java b/services/core/java/com/android/server/wm/TaskWindowSurfaceInfo.java
+index 9663cea8a..5b664fba7 100644
+--- a/services/core/java/com/android/server/wm/TaskWindowSurfaceInfo.java
++++ b/services/core/java/com/android/server/wm/TaskWindowSurfaceInfo.java
+@@ -249,18 +249,7 @@ class TaskWindowSurfaceInfo {
+     }
+ 
+     void setWindowBoundaryGap(int left, int top, int right, int bottom) {
+-        if (left > 0) {
+-            mWindowBoundaryGap.left = left;
+-        }
+-        if (top > 0) {
+-            mWindowBoundaryGap.top = top;
+-        }
+-        if (right > 0) {
+-            mWindowBoundaryGap.right = right;
+-        }
+-        if (bottom > 0) {
+-            mWindowBoundaryGap.bottom = bottom;
+-        }
++        mWindowBoundaryGap.set(left, top, right, bottom);
+     }
+ 
+     Rect getWindowBoundaryGap() {
+@@ -673,6 +662,14 @@ class TaskWindowSurfaceInfo {
+     private android.view.VelocityTracker mVelocityTracker;
+ 
+     void startMoving(float x, float y) {
++        final Rect bounds = getTaskWindowSurfaceBounds();
++        final int[] animXY = new int[2];
++        final float[] animScale = new float[1];
++        if (mPopUpAnimationController.getCurrentAnimPosition(animXY, animScale)) {
++            bounds.offsetTo(animXY[0], animXY[1]);
++            mPopUpAnimationController.clearAnimPosition();
++        }
++        cancelPopUpViewAnimation();
+         mIsDragging = true;
+         mDragStartX = x;
+         mDragStartY = y;
+@@ -689,7 +686,6 @@ class TaskWindowSurfaceInfo {
+                 now, now, MotionEvent.ACTION_DOWN, x, y, 0);
+         mVelocityTracker.addMovement(syntheticEvent);
+         syntheticEvent.recycle();
+-        final Rect bounds = getTaskWindowSurfaceBounds();
+         mDragStartLeft = bounds.left;
+         mDragStartTop = bounds.top;
+         if (DEBUG_POP_UP) {
+-- 
+2.54.0
+
