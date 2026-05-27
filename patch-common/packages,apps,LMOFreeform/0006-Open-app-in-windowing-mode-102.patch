@@ -1,110 +1,110 @@
-From f02872e751493b4f444e46d93aeb074ea3f79378 Mon Sep 17 00:00:00 2001
+From 0a2805e04bcceb82ac190632c16a8f9324af2ae1 Mon Sep 17 00:00:00 2001
 From: Hecheng Yu <kde-yyds@qq.com>
-Date: Sat, 7 Mar 2026 22:16:19 +0800
+Date: Wed, 27 May 2026 16:51:26 +0800
 Subject: [PATCH 6/6] Open app in windowing mode 102
 
 ---
- .../sidebar/service/SidebarView.kt            | 23 +++++++++++--------
- .../sidebar/ui/all_app/AllAppActivity.kt      | 23 ++++++++++++-------
- 2 files changed, 29 insertions(+), 17 deletions(-)
+ .../receiver/StartFreeformReceiver.kt         | 78 ++++++++++---------
+ 1 file changed, 40 insertions(+), 38 deletions(-)
 
-diff --git a/sidebar/app/src/main/java/com/libremobileos/sidebar/service/SidebarView.kt b/sidebar/app/src/main/java/com/libremobileos/sidebar/service/SidebarView.kt
-index 233999e..b22a794 100644
---- a/sidebar/app/src/main/java/com/libremobileos/sidebar/service/SidebarView.kt
-+++ b/sidebar/app/src/main/java/com/libremobileos/sidebar/service/SidebarView.kt
-@@ -1,6 +1,8 @@
- package com.libremobileos.sidebar.service
+diff --git a/app/src/main/java/com/libremobileos/freeform/receiver/StartFreeformReceiver.kt b/app/src/main/java/com/libremobileos/freeform/receiver/StartFreeformReceiver.kt
+index cac2517..495b35d 100644
+--- a/app/src/main/java/com/libremobileos/freeform/receiver/StartFreeformReceiver.kt
++++ b/app/src/main/java/com/libremobileos/freeform/receiver/StartFreeformReceiver.kt
+@@ -1,55 +1,57 @@
+ package com.libremobileos.freeform.receiver
  
- import android.annotation.SuppressLint
 +import android.app.ActivityOptions
-+import android.content.ComponentName
+ import android.content.BroadcastReceiver
  import android.content.Context
  import android.content.Intent
- import android.content.res.Configuration
-@@ -64,8 +66,7 @@ class SidebarView(
- 
-         companion object {
-             private const val OFFSET_X = 90
--            private const val PACKAGE = "com.libremobileos.freeform"
--            private const val ACTION = "com.libremobileos.freeform.START_FREEFORM"
-+            private const val WINDOWING_MODE_AVIUM_FREEFORM = 102
-             private const val TAG = "SidebarView"
-         }
- 
-@@ -74,14 +75,18 @@ class SidebarView(
-         }
- 
-         private fun launchAppInFreeform(appInfo: AppInfo) {
--            val intent = Intent(ACTION).apply {
--                setPackage(PACKAGE)
--                putExtra("packageName", appInfo.packageName)
--                putExtra("activityName", appInfo.activityName)
--                putExtra("userId", appInfo.userId)
-+            val activityOptions = ActivityOptions.makeBasic().apply {
-+                setLaunchWindowingMode(WINDOWING_MODE_AVIUM_FREEFORM)
-+            }
-+            val intent = Intent().apply {
-+                setClassName(appInfo.packageName, appInfo.activityName)
-+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
-+            }
-+            try {
-+                context.startActivityAsUser(intent, activityOptions.toBundle(), UserHandle.of(appInfo.userId))
-+            } catch (e: Exception) {
-+                logger.e("Failed to launch ${appInfo.packageName} in freeform: $e")
-             }
--            context.sendBroadcastAsUser(intent, UserHandle(UserHandle.USER_CURRENT))
--            // Use animate collapse instead of hard remove for smoother feel
-             animateCollapse()
-         }
- 
-diff --git a/sidebar/app/src/main/java/com/libremobileos/sidebar/ui/all_app/AllAppActivity.kt b/sidebar/app/src/main/java/com/libremobileos/sidebar/ui/all_app/AllAppActivity.kt
-index dd2abdf..85c8a13 100644
---- a/sidebar/app/src/main/java/com/libremobileos/sidebar/ui/all_app/AllAppActivity.kt
-+++ b/sidebar/app/src/main/java/com/libremobileos/sidebar/ui/all_app/AllAppActivity.kt
-@@ -1,7 +1,10 @@
- package com.libremobileos.sidebar.ui.all_app
- 
-+import android.app.ActivityOptions
-+import android.content.ComponentName
- import android.content.Intent
- import android.os.Bundle
+-import com.libremobileos.freeform.LMOFreeform
+-import com.libremobileos.freeform.LMOFreeformServiceManager
+-import com.libremobileos.freeform.utils.Debug
 +import android.os.UserHandle
- import androidx.activity.ComponentActivity
- import androidx.activity.compose.setContent
- import androidx.activity.viewModels
-@@ -20,8 +23,7 @@ class AllAppActivity: ComponentActivity() {
-     private val viewModel: AllAppViewModel by viewModels { AllAppViewModel.Factory }
+ import com.libremobileos.freeform.utils.Logger
+-import kotlin.math.roundToInt
  
+-/**
+- * @author KindBrave
+- * @since 2023/9/19
+- */
+ class StartFreeformReceiver : BroadcastReceiver() {
++
+     private val logger = Logger(TAG)
++
      companion object {
--        private const val PACKAGE = "com.libremobileos.freeform"
--        private const val ACTION = "com.libremobileos.freeform.START_FREEFORM"
-+        private const val WINDOWING_MODE_AVIUM_FREEFORM = 102
-         private const val TAG = "AllAppActivity"
+         private const val TAG = "StartFreeformReceiver"
+         private const val ACTION = "com.libremobileos.freeform.START_FREEFORM"
+-        private const val INITIAL_MAX_WIDTH = 600
+-        private const val INITIAL_MAX_HEIGHT = 600
++        private const val AVIUM_FREEFORM_MODE = 102
      }
- 
-@@ -46,13 +48,18 @@ class AllAppActivity: ComponentActivity() {
-     }
- 
-     private fun onClick(appInfo: AppInfo) {
--        val intent = Intent(ACTION).apply {
--            setPackage(PACKAGE)
--            putExtra("packageName", appInfo.packageName)
--            putExtra("activityName", appInfo.activityName)
--            putExtra("userId", appInfo.userId)
-+        val activityOptions = ActivityOptions.makeBasic().apply {
-+            setLaunchWindowingMode(WINDOWING_MODE_AVIUM_FREEFORM)
++
+     override fun onReceive(context: Context, intent: Intent) {
+-        if (intent.action == ACTION) {
+-            if (Debug.isDebug) logger.d("onReceive ${intent.extras}")
+-            val packageName = intent.getStringExtra("packageName")
+-            val activityName = intent.getStringExtra("activityName")
+-            val userId = intent.getIntExtra("userId", 0)
+-            val taskId = intent.getIntExtra("taskId", -1)
+-
+-            if (packageName != null && activityName != null) {
+-                val sp = context.getSharedPreferences(LMOFreeform.CONFIG, Context.MODE_PRIVATE)
+-                val screenWidth = context.resources.displayMetrics.widthPixels
+-                val screenHeight = context.resources.displayMetrics.heightPixels
+-                val screenDensityDpi = context.resources.displayMetrics.densityDpi
+-                
+-                val freeformWidth = sp.getInt("freeform_width", (screenWidth * 0.6f).roundToInt())
+-                    .coerceAtMost(INITIAL_MAX_WIDTH)
+-                val freeformHeight = sp.getInt("freeform_height", (screenHeight * 0.5f).roundToInt())
+-                    .coerceAtMost(INITIAL_MAX_HEIGHT)
+-                
+-                LMOFreeformServiceManager.createWindow(
+-                    packageName,
+-                    activityName,
+-                    userId,
+-                    taskId,
+-                    freeformWidth,
+-                    freeformHeight,
+-                    sp.getInt("freeform_dpi", screenDensityDpi),
+-                )
+-            }
++        if (intent.action != ACTION) return
++
++        logger.d("onReceive ${intent.extras}")
++
++        val packageName = intent.getStringExtra("packageName") ?: return
++        val activityName = intent.getStringExtra("activityName") ?: return
++        val userId = intent.getIntExtra("userId", 0)
++        // taskId is ignored – we always start fresh in mode 102
++
++        startActivityInFreeform(context, packageName, activityName, userId)
++    }
++
++    private fun startActivityInFreeform(
++        context: Context,
++        packageName: String,
++        activityName: String,
++        userId: Int
++    ) {
++        val launchIntent = Intent().apply {
++            setClassName(packageName, activityName)
++            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 +        }
-+        val intent = Intent().apply {
-+            setClassName(appInfo.packageName, appInfo.activityName)
-+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
-+        }
-+        try {
-+            startActivityAsUser(intent, activityOptions.toBundle(), UserHandle.of(appInfo.userId))
-+        } catch (e: Exception) {
-+            logger.e("Failed to launch ${appInfo.packageName} in freeform: $e")
++
++        val options = ActivityOptions.makeBasic().apply {
++            setLaunchWindowingMode(AVIUM_FREEFORM_MODE)
          }
--        sendBroadcast(intent)
-         finish()
++
++        val targetContext = if (userId != 0) {
++            context.createPackageContextAsUser(packageName, 0, UserHandle.of(userId))
++        } else {
++            context
++        }
++
++        targetContext.startActivity(launchIntent, options.toBundle())
++        logger.d("Started $packageName/$activityName in windowing mode $AVIUM_FREEFORM_MODE")
      }
  }
 -- 
