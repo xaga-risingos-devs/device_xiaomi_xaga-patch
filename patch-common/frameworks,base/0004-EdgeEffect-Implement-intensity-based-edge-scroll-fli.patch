@@ -1,7 +1,7 @@
-From 90083938301bae66ac3f44412198fb56ff9bec5a Mon Sep 17 00:00:00 2001
+From 308eb5ee0724e78fb7342f6455c0334e2b20d93d Mon Sep 17 00:00:00 2001
 From: minaripenguin <minaripenguin@users.noreply.github.com>
 Date: Thu, 14 Mar 2024 19:07:49 +0800
-Subject: [PATCH 3/5] EdgeEffect: Implement intensity-based edge scroll fling
+Subject: [PATCH 4/6] EdgeEffect: Implement intensity-based edge scroll fling
  haptics
 
 squashed:
@@ -19,10 +19,10 @@ Signed-off-by: minaripenguin <minaripenguin@users.noreply.github.com>
  2 files changed, 29 insertions(+)
 
 diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
-index 9290d8049..b65837ff0 100644
+index 5a49c7a3e..d80402421 100644
 --- a/core/java/android/provider/Settings.java
 +++ b/core/java/android/provider/Settings.java
-@@ -7995,6 +7995,12 @@ public final class Settings {
+@@ -8014,6 +8014,12 @@ public final class Settings {
          @Deprecated
          public static final String WIFI_WATCHDOG_PING_DELAY_MS = Secure.WIFI_WATCHDOG_PING_DELAY_MS;
  

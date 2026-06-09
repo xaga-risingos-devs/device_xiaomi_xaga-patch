@@ -1,7 +1,7 @@
-From 6155cfc01dc423bcc951655a4ad218a042aa114d Mon Sep 17 00:00:00 2001
+From d1a7f929a44dd084b4e953fdf02edafccbb5057a Mon Sep 17 00:00:00 2001
 From: minaripenguin <minaripenguin@users.noreply.github.com>
 Date: Thu, 14 Mar 2024 18:40:54 +0800
-Subject: [PATCH 2/5] core: Introduce VibrationUtils
+Subject: [PATCH 3/6] core: Introduce VibrationUtils
 
 Change-Id: Ic5bc11cae0b0c759ad462ef9f6a583c2fee4a3ef
 Signed-off-by: minaripenguin <minaripenguin@users.noreply.github.com>

@@ -1,8 +1,8 @@
-From 8a1a0e3e70075b132fcd685e2cb051118de83a29 Mon Sep 17 00:00:00 2001
+From cef03ab25f0adae75f9862f3df2522f6e8310a2a Mon Sep 17 00:00:00 2001
 From: Hecheng Yu <kde-yyds@qq.com>
 Date: Sun, 24 May 2026 23:30:11 +0800
-Subject: [PATCH] ActionChain: Do not call collectExistenceChange if transition
- is null
+Subject: [PATCH 1/6] ActionChain: Do not call collectExistenceChange if
+ transition is null
 
 Fix Gmail soft reboot
 

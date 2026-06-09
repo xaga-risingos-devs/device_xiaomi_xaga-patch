@@ -1,7 +1,7 @@
-From d4cc28b59905da8cd3ded737174c576ca4b0d96c Mon Sep 17 00:00:00 2001
+From 391f88969081342130308e043244567da3944d3c Mon Sep 17 00:00:00 2001
 From: Adithya R <gh0strider.2k18.reborn@gmail.com>
 Date: Thu, 16 Jan 2025 18:48:32 +0800
-Subject: [PATCH 1/5] SystemUI: Blur the background of SysUI dialogs
+Subject: [PATCH 2/6] SystemUI: Blur the background of SysUI dialogs
 
 Change-Id: I2d2b71da7f3526b2d77ebc80a0157e733a74d138
 ---

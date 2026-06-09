@@ -1,7 +1,7 @@
-From 8484f5d114e405fa0994c691e7c3e7a3f2ea526b Mon Sep 17 00:00:00 2001
+From 9cde0acb9e6be5b13c3a0ba5b15307c332a20476 Mon Sep 17 00:00:00 2001
 From: ruyue <ruyueee@outlook.com>
 Date: Mon, 13 Apr 2026 20:28:49 +0800
-Subject: [PATCH 4/5] Add Pop-Up View support
+Subject: [PATCH 5/6] Add Pop-Up View support
 
 squashe:
 - SDK: Port Pop-Up View feature from Nothing OS 2
@@ -428,7 +428,7 @@ index 000000000..c12ba23b9
 +    }
 +}
 diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
-index b65837ff0..8c106d757 100644
+index d80402421..4578c722c 100644
 --- a/core/java/android/provider/Settings.java
 +++ b/core/java/android/provider/Settings.java
 @@ -5383,6 +5383,38 @@ public final class Settings {
@@ -470,7 +470,7 @@ index b65837ff0..8c106d757 100644
          /**
           * Control lock behavior on fold
           *
-@@ -15332,6 +15364,13 @@ public final class Settings {
+@@ -15368,6 +15400,13 @@ public final class Settings {
          @Readable
          public static final String UNLOCK_SOUND = "unlock_sound";
  
@@ -659,10 +659,10 @@ index 000000000..26b6a8ec8
 +    }
 +}
 diff --git a/core/java/android/view/ViewRootImpl.java b/core/java/android/view/ViewRootImpl.java
-index 9486887f3..fd9191fd1 100644
+index df5a889d1..6ffaea36d 100644
 --- a/core/java/android/view/ViewRootImpl.java
 +++ b/core/java/android/view/ViewRootImpl.java
-@@ -1251,6 +1251,9 @@ public final class ViewRootImpl implements ViewParent,
+@@ -1253,6 +1253,9 @@ public final class ViewRootImpl implements ViewParent,
  
      private final boolean mDisableDrawWakeLock;
  
@@ -672,7 +672,7 @@ index 9486887f3..fd9191fd1 100644
      private String mTag = TAG;
      private String mFpsTraceName;
      private String mLargestViewTraceName;
-@@ -2305,6 +2308,7 @@ public final class ViewRootImpl implements ViewParent,
+@@ -2307,6 +2310,7 @@ public final class ViewRootImpl implements ViewParent,
                  mAppVisibilityChanged = true;
                  scheduleTraversals();
              }
@@ -680,7 +680,7 @@ index 9486887f3..fd9191fd1 100644
              // Only enable if the window is not already removed (via earlier call to doDie())
              if (!mRemoved || !mAppVisible) {
                  AnimationHandler.requestAnimatorsEnabled(mAppVisible, this);
-@@ -6882,6 +6886,8 @@ public final class ViewRootImpl implements ViewParent,
+@@ -6888,6 +6892,8 @@ public final class ViewRootImpl implements ViewParent,
          }
  
          mForceNextConfigUpdate = false;
@@ -689,7 +689,7 @@ index 9486887f3..fd9191fd1 100644
      }
  
      /**
-@@ -10897,6 +10903,9 @@ public final class ViewRootImpl implements ViewParent,
+@@ -10903,6 +10909,9 @@ public final class ViewRootImpl implements ViewParent,
          @Override
          public void onInputEvent(InputEvent event) {
              processRawInputEvent(event);
@@ -843,7 +843,7 @@ index 000000000..88ec4ea9a
 +    }
 +}
 diff --git a/core/java/android/view/WindowManager.java b/core/java/android/view/WindowManager.java
-index 647d50a29..3b3d53e86 100644
+index 647d50a29..1587a83dd 100644
 --- a/core/java/android/view/WindowManager.java
 +++ b/core/java/android/view/WindowManager.java
 @@ -577,7 +577,8 @@ public interface WindowManager extends ViewManager {
@@ -2748,18 +2748,18 @@ index 000000000..eac85ac15
 +    }
 +}
 diff --git a/libs/WindowManager/Shell/src/com/android/wm/shell/recents/RecentsTransitionHandler.java b/libs/WindowManager/Shell/src/com/android/wm/shell/recents/RecentsTransitionHandler.java
-index d8519df0a..bea65eba4 100644
+index 5f5c80461..937b92db4 100644
 --- a/libs/WindowManager/Shell/src/com/android/wm/shell/recents/RecentsTransitionHandler.java
 +++ b/libs/WindowManager/Shell/src/com/android/wm/shell/recents/RecentsTransitionHandler.java
-@@ -33,6 +33,7 @@ import static android.view.WindowManager.TRANSIT_TO_BACK;
- import static android.view.WindowManager.TRANSIT_TO_FRONT;
+@@ -32,6 +32,7 @@ import static android.view.WindowManager.TRANSIT_SLEEP;
+ import static android.view.WindowManager.TRANSIT_TO_BACK;
  import static android.window.DesktopModeFlags.ENABLE_DESKTOP_RECENTS_TRANSITIONS_CORNERS_BUGFIX;
  import static android.window.TransitionInfo.FLAG_MOVED_TO_TOP;
 +import static android.window.TransitionInfo.FLAG_EXIT_POP_UP_VIEW_DISPLAY_ROTATION;
  import static android.window.TransitionInfo.FLAG_TRANSLUCENT;
  
  import static com.android.wm.shell.recents.RecentsTransitionStateListener.TRANSITION_STATE_ANIMATING;
-@@ -458,6 +459,7 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
+@@ -455,6 +456,7 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
          private boolean mKeyguardLocked = false;
          private boolean mWillFinishToHome = false;
          private Transitions.TransitionHandler mTakeoverHandler = null;
@@ -2767,7 +2767,7 @@ index d8519df0a..bea65eba4 100644
  
          /** The animation is idle, waiting for the user to choose a task to switch to. */
          private static final int STATE_NORMAL = 0;
-@@ -1202,6 +1204,9 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
+@@ -1199,6 +1201,9 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
                          closingTasks.add(change);
                      }
                  } else if (change.getMode() == TRANSIT_CHANGE) {
@@ -2777,7 +2777,7 @@ index d8519df0a..bea65eba4 100644
                      // Finish recents animation if the display is changed, so the default
                      // transition handler can play the animation such as rotation effect.
                      if (change.hasFlags(TransitionInfo.FLAG_IS_DISPLAY)
-@@ -1573,6 +1578,7 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
+@@ -1570,6 +1575,7 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
              boolean returningToApp = !toHome
                      && !mWillFinishToHome
                      && mPausingTasks != null
@@ -2992,7 +2992,7 @@ index 000000000..ee9d429a7
 +    }
 +}
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBarNotificationActivityStarter.java b/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBarNotificationActivityStarter.java
-index 12ee69897..638a3ebbe 100644
+index baa839b60..443668560 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBarNotificationActivityStarter.java
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/StatusBarNotificationActivityStarter.java
 @@ -17,6 +17,7 @@
@@ -3003,7 +3003,7 @@ index 12ee69897..638a3ebbe 100644
  import static android.service.notification.NotificationListenerService.REASON_CLICK;
  
  import static com.android.systemui.statusbar.phone.ActivityStarterUtilsKt.addCookieIfNeeded;
-@@ -98,6 +99,8 @@ import java.util.concurrent.Executor;
+@@ -100,6 +101,8 @@ import java.util.concurrent.Executor;
  
  import javax.inject.Inject;
  
@@ -3012,7 +3012,7 @@ index 12ee69897..638a3ebbe 100644
  /**
   * Status bar implementation of {@link NotificationActivityStarter}.
   */
-@@ -129,6 +132,7 @@ public class StatusBarNotificationActivityStarter implements NotificationActivit
+@@ -131,6 +134,7 @@ public class StatusBarNotificationActivityStarter implements NotificationActivit
  
      private final NotificationVisibilityProvider mVisibilityProvider;
      private final HeadsUpManager mHeadsUpManager;
@@ -3020,7 +3020,7 @@ index 12ee69897..638a3ebbe 100644
      private final ActivityStarter mActivityStarter;
      private final CommandQueue mCommandQueue;
      private final NotificationClickNotifier mClickNotifier;
-@@ -170,6 +174,7 @@ public class StatusBarNotificationActivityStarter implements NotificationActivit
+@@ -172,6 +176,7 @@ public class StatusBarNotificationActivityStarter implements NotificationActivit
              @Application CoroutineScope applicationScope,
              NotificationVisibilityProvider visibilityProvider,
              HeadsUpManager headsUpManager,
@@ -3028,7 +3028,7 @@ index 12ee69897..638a3ebbe 100644
              ActivityStarter activityStarter,
              CommandQueue commandQueue,
              NotificationClickNotifier clickNotifier,
-@@ -205,6 +210,7 @@ public class StatusBarNotificationActivityStarter implements NotificationActivit
+@@ -207,6 +212,7 @@ public class StatusBarNotificationActivityStarter implements NotificationActivit
          mApplicationScope = applicationScope;
          mVisibilityProvider = visibilityProvider;
          mHeadsUpManager = headsUpManager;
@@ -3036,7 +3036,7 @@ index 12ee69897..638a3ebbe 100644
          mActivityStarter = activityStarter;
          mCommandQueue = commandQueue;
          mClickNotifier = clickNotifier;
-@@ -563,10 +569,17 @@ public class StatusBarNotificationActivityStarter implements NotificationActivit
+@@ -584,10 +590,17 @@ public class StatusBarNotificationActivityStarter implements NotificationActivit
                                      mKeyguardStateController.isShowing(),
                                      eventTime)
                                      : getActivityOptions(displayId, adapter);
@@ -3171,7 +3171,7 @@ index 0715550d6..438e43c55 100644
                  if (windowingMode != WINDOWING_MODE_UNDEFINED) {
                      Slog.wtf(TAG, "Unknown windowing mode for task=" + focusedTask
 diff --git a/services/core/java/com/android/server/wm/ActivityRecord.java b/services/core/java/com/android/server/wm/ActivityRecord.java
-index dba38d78b..843768cf1 100644
+index f209120f3..2a502c7d5 100644
 --- a/services/core/java/com/android/server/wm/ActivityRecord.java
 +++ b/services/core/java/com/android/server/wm/ActivityRecord.java
 @@ -206,6 +206,8 @@ import static com.android.server.wm.ActivityTaskManagerService.RELAUNCH_REASON_N
@@ -3342,7 +3342,7 @@ index 99612f62d..49c185265 100644
                  ? mLaunchParams.mPreferredTaskDisplayArea
                  : mRootWindowContainer.getDefaultTaskDisplayArea();
 diff --git a/services/core/java/com/android/server/wm/ActivityTaskManagerService.java b/services/core/java/com/android/server/wm/ActivityTaskManagerService.java
-index 0192b6901..9c21e0de1 100644
+index a94cdffd3..18855550b 100644
 --- a/services/core/java/com/android/server/wm/ActivityTaskManagerService.java
 +++ b/services/core/java/com/android/server/wm/ActivityTaskManagerService.java
 @@ -138,6 +138,8 @@ import static com.android.server.wm.Task.REPARENT_KEEP_ROOT_TASK_AT_FRONT;
@@ -3395,7 +3395,7 @@ index 0192b6901..9c21e0de1 100644
          // Activity supports picture-in-picture, now check that we can enter PiP at this
          // point, if it is
          if (!r.checkEnterPictureInPictureState("enterPictureInPictureMode",
-@@ -7323,6 +7334,7 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
+@@ -7340,6 +7351,7 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
          public boolean onForceStopPackage(String packageName, boolean doit, boolean evenPersistent,
                  int userId) {
              synchronized (mGlobalLock) {
@@ -4044,7 +4044,7 @@ index 000000000..856022783
 +    }
 +}
 diff --git a/services/core/java/com/android/server/wm/DisplayContent.java b/services/core/java/com/android/server/wm/DisplayContent.java
-index 0797a4561..dddc3bd16 100644
+index 701ec2a2c..6d9f4c932 100644
 --- a/services/core/java/com/android/server/wm/DisplayContent.java
 +++ b/services/core/java/com/android/server/wm/DisplayContent.java
 @@ -153,8 +153,10 @@ import static com.android.server.wm.WindowManagerService.H.WINDOW_HIDE_TIMEOUT;
@@ -4102,7 +4102,7 @@ index 0797a4561..dddc3bd16 100644
      private final Consumer<WindowState> mUpdateWindowsForAnimator = w -> {
          WindowStateAnimator winAnimator = w.mWinAnimator;
          final ActivityRecord activity = w.mActivityRecord;
-@@ -1230,6 +1241,7 @@ class DisplayContent extends RootDisplayArea implements WindowManagerPolicy.Disp
+@@ -1234,6 +1245,7 @@ class DisplayContent extends RootDisplayArea implements WindowManagerPolicy.Disp
          if (mWmService.mSystemReady) {
              mDisplayPolicy.systemReady();
          }
@@ -4110,7 +4110,7 @@ index 0797a4561..dddc3bd16 100644
          mPinnedTaskController = new PinnedTaskController(mWmService, this);
  
          // Set up the policy and build the display area hierarchy.
-@@ -1448,6 +1460,10 @@ class DisplayContent extends RootDisplayArea implements WindowManagerPolicy.Disp
+@@ -1452,6 +1464,10 @@ class DisplayContent extends RootDisplayArea implements WindowManagerPolicy.Disp
          return mDisplayId;
      }
  
@@ -4121,7 +4121,7 @@ index 0797a4561..dddc3bd16 100644
      WindowToken getWindowToken(IBinder binder) {
          return mTokenMap.get(binder);
      }
-@@ -3471,6 +3487,17 @@ class DisplayContent extends RootDisplayArea implements WindowManagerPolicy.Disp
+@@ -3475,6 +3491,17 @@ class DisplayContent extends RootDisplayArea implements WindowManagerPolicy.Disp
          });
      }
  
@@ -4139,7 +4139,7 @@ index 0797a4561..dddc3bd16 100644
      @Override
      void switchUser(int userId) {
          super.switchUser(userId);
-@@ -4144,11 +4171,16 @@ class DisplayContent extends RootDisplayArea implements WindowManagerPolicy.Disp
+@@ -4148,11 +4175,16 @@ class DisplayContent extends RootDisplayArea implements WindowManagerPolicy.Disp
                  newFocus, getDisplayId(), Debug.getCallers(4));
          final Task oldTask = mFocusedApp != null ? mFocusedApp.getTask() : null;
          final Task newTask = newFocus != null ? newFocus.getTask() : null;
@@ -4156,7 +4156,7 @@ index 0797a4561..dddc3bd16 100644
  
          if (mDisplayId == DEFAULT_DISPLAY && newFocus != null) {
              AxSandboxService.get().onAppFocusChanged(newFocus, newTask);
-@@ -5389,6 +5421,61 @@ class DisplayContent extends RootDisplayArea implements WindowManagerPolicy.Disp
+@@ -5393,6 +5425,61 @@ class DisplayContent extends RootDisplayArea implements WindowManagerPolicy.Disp
                  && (ignoreFrozen || mDisplayPolicy.isScreenOnFully());
      }
  
@@ -4218,7 +4218,7 @@ index 0797a4561..dddc3bd16 100644
      private static final class ApplySurfaceChangesTransactionState {
          public boolean displayHasContent;
          public boolean obscured;
-@@ -5520,6 +5607,10 @@ class DisplayContent extends RootDisplayArea implements WindowManagerPolicy.Disp
+@@ -5524,6 +5611,10 @@ class DisplayContent extends RootDisplayArea implements WindowManagerPolicy.Disp
          }
      }
  
@@ -4229,7 +4229,7 @@ index 0797a4561..dddc3bd16 100644
      @Override
      SurfaceControl.Builder makeChildSurface(WindowContainer child) {
          final SurfaceControl.Builder b = mWmService.makeSurfaceBuilder().setContainerLayer();
-@@ -5888,6 +5979,16 @@ class DisplayContent extends RootDisplayArea implements WindowManagerPolicy.Disp
+@@ -5892,6 +5983,16 @@ class DisplayContent extends RootDisplayArea implements WindowManagerPolicy.Disp
          return mA11yOverlayLayer;
      }
  
@@ -4246,7 +4246,7 @@ index 0797a4561..dddc3bd16 100644
      /**
       * Updates the display's system gesture exclusion.
       *
-@@ -6253,7 +6354,8 @@ class DisplayContent extends RootDisplayArea implements WindowManagerPolicy.Disp
+@@ -6257,7 +6358,8 @@ class DisplayContent extends RootDisplayArea implements WindowManagerPolicy.Disp
                  && (windowingMode == WINDOWING_MODE_FULLSCREEN
                  || windowingMode == WINDOWING_MODE_FREEFORM
                  || windowingMode == WINDOWING_MODE_PINNED
@@ -4257,7 +4257,7 @@ index 0797a4561..dddc3bd16 100644
  
      @Nullable
 diff --git a/services/core/java/com/android/server/wm/DisplayPolicy.java b/services/core/java/com/android/server/wm/DisplayPolicy.java
-index a82b36133..3b8976e33 100644
+index 2ff2e71dc..5236f553e 100644
 --- a/services/core/java/com/android/server/wm/DisplayPolicy.java
 +++ b/services/core/java/com/android/server/wm/DisplayPolicy.java
 @@ -17,6 +17,7 @@
@@ -4276,7 +4276,7 @@ index a82b36133..3b8976e33 100644
  import com.android.internal.protolog.ProtoLog;
  import com.android.internal.statusbar.LetterboxDetails;
  import com.android.internal.util.crdroid.Utils;
-@@ -2108,6 +2110,17 @@ public class DisplayPolicy {
+@@ -2114,6 +2116,17 @@ public class DisplayPolicy {
                  });
      }
  
@@ -4294,7 +4294,7 @@ index a82b36133..3b8976e33 100644
      boolean isShowingDreamLw() {
          return mShowingDream;
      }
-@@ -2677,6 +2690,16 @@ public class DisplayPolicy {
+@@ -2683,6 +2696,16 @@ public class DisplayPolicy {
                  mFocusedWindow != null && (isRemoteControlling || fillsDisplayWindowingMode(
                          mFocusedWindow)) ? mFocusedWindow : mTopFullscreenOpaqueWindowState;
  
@@ -4311,7 +4311,7 @@ index a82b36133..3b8976e33 100644
          // Immersive mode confirmation should never affect the system bar visibility, otherwise
          // it will unhide the navigation bar and hide itself.
          if (winCandidate != null && (winCandidate.mAttrs.privateFlags
-@@ -2706,7 +2729,7 @@ public class DisplayPolicy {
+@@ -2712,7 +2735,7 @@ public class DisplayPolicy {
  
          final int displayId = getDisplayId();
          final int disableFlags = win != null ? win.getDisableFlags() : 0;
@@ -4320,7 +4320,7 @@ index a82b36133..3b8976e33 100644
          if (!mRelaunchingSystemBarColorApps.isEmpty()) {
              // The appearance of system bars might change while relaunching apps. We don't report
              // the intermediate state to system UI. Otherwise, it might trigger redundant effects.
-@@ -2825,7 +2848,7 @@ public class DisplayPolicy {
+@@ -2831,7 +2854,7 @@ public class DisplayPolicy {
          return appearance;
      }
  
@@ -4329,7 +4329,7 @@ index a82b36133..3b8976e33 100644
          final TaskDisplayArea defaultTaskDisplayArea = mDisplayContent.getDefaultTaskDisplayArea();
          // TODO(b/407898759): Migrate to have WM Shell to override the insets visibility based on
          // top focused Task.
-@@ -2855,7 +2878,8 @@ public class DisplayPolicy {
+@@ -2861,7 +2884,8 @@ public class DisplayPolicy {
                  win,
                  mShowingPermanentInsetsTypes,
                  mHidingPermanentInsetsTypes,
@@ -4339,7 +4339,7 @@ index a82b36133..3b8976e33 100644
  
          final boolean topAppHidesStatusBar = topAppHidesSystemBar(Type.statusBars());
          if (getStatusBar() != null) {
-@@ -3415,4 +3439,12 @@ public class DisplayPolicy {
+@@ -3425,4 +3449,12 @@ public class DisplayPolicy {
                  ? uiModeManagerInternal.getDisplayUiMode(getDisplayId())
                  : (Configuration.UI_MODE_TYPE_UNDEFINED | Configuration.UI_MODE_NIGHT_UNDEFINED);
      }
@@ -8226,10 +8226,10 @@ index 000000000..70ce72f1e
 +    }
 +}
 diff --git a/services/core/java/com/android/server/wm/RecentTasks.java b/services/core/java/com/android/server/wm/RecentTasks.java
-index 737095147..eb0887a9d 100644
+index 90a7161b9..5eafbebc3 100644
 --- a/services/core/java/com/android/server/wm/RecentTasks.java
 +++ b/services/core/java/com/android/server/wm/RecentTasks.java
-@@ -1496,6 +1496,9 @@ class RecentTasks {
+@@ -1504,6 +1504,9 @@ class RecentTasks {
                      return false;
                  }
                  break;
@@ -8240,7 +8240,7 @@ index 737095147..eb0887a9d 100644
  
          // If we're in lock task mode, ignore the root task
 diff --git a/services/core/java/com/android/server/wm/RootWindowContainer.java b/services/core/java/com/android/server/wm/RootWindowContainer.java
-index d4d46be9f..6133606f2 100644
+index 930e1d173..a3e5d39e2 100644
 --- a/services/core/java/com/android/server/wm/RootWindowContainer.java
 +++ b/services/core/java/com/android/server/wm/RootWindowContainer.java
 @@ -20,6 +20,7 @@ import static android.app.ActivityTaskManager.INVALID_TASK_ID;
@@ -8251,7 +8251,7 @@ index d4d46be9f..6133606f2 100644
  import static android.app.WindowConfiguration.WINDOWING_MODE_PINNED;
  import static android.content.Intent.FLAG_ACTIVITY_NEW_TASK;
  import static android.content.pm.ActivityInfo.LAUNCH_SINGLE_INSTANCE;
-@@ -3716,6 +3717,7 @@ class RootWindowContainer extends WindowContainer<DisplayContent>
+@@ -3718,6 +3719,7 @@ class RootWindowContainer extends WindowContainer<DisplayContent>
                          && task.getParent() != targetRootTask) {
                      final int reparentMode = onTop
                              ? REPARENT_MOVE_ROOT_TASK_TO_FRONT : REPARENT_LEAVE_ROOT_TASK_IN_PLACE;
@@ -10403,7 +10403,7 @@ index 000000000..3096bd78a
 +    }
 +}
 diff --git a/services/core/java/com/android/server/wm/Transition.java b/services/core/java/com/android/server/wm/Transition.java
-index 9569cdd73..57a4e4af6 100644
+index eec17e84c..254e78d09 100644
 --- a/services/core/java/com/android/server/wm/Transition.java
 +++ b/services/core/java/com/android/server/wm/Transition.java
 @@ -40,7 +40,9 @@ import static android.view.WindowManager.TRANSIT_CHANGE;
@@ -10434,7 +10434,7 @@ index 9569cdd73..57a4e4af6 100644
  import android.content.pm.ActivityInfo;
  import android.graphics.Point;
  import android.graphics.Rect;
-@@ -1192,6 +1198,16 @@ class Transition implements BLASTSyncEngine.TransactionReadyListener {
+@@ -1198,6 +1204,16 @@ class Transition implements BLASTSyncEngine.TransactionReadyListener {
              if (target.getParent() == null) continue;
              final SurfaceControl targetLeash = getLeashSurface(target, null /* t */);
              final SurfaceControl origParent = getOrigParentSurface(target);
@@ -10451,7 +10451,7 @@ index 9569cdd73..57a4e4af6 100644
              // Ensure surfaceControls are re-parented back into the hierarchy.
              t.reparent(targetLeash, origParent);
              t.setLayer(targetLeash, target.getLastLayer());
-@@ -3171,6 +3187,12 @@ class Transition implements BLASTSyncEngine.TransactionReadyListener {
+@@ -3177,6 +3193,12 @@ class Transition implements BLASTSyncEngine.TransactionReadyListener {
              change.setMode(info.getTransitMode(target));
              info.mReadyMode = change.getMode();
              change.setStartAbsBounds(info.mAbsoluteBounds);
@@ -10464,7 +10464,7 @@ index 9569cdd73..57a4e4af6 100644
              change.setFlags(info.getChangeFlags(target));
              info.mReadyFlags = change.getFlags();
              change.setDisplayId(info.mDisplayId, getDisplayId(target));
-@@ -3301,8 +3323,33 @@ class Transition implements BLASTSyncEngine.TransactionReadyListener {
+@@ -3307,8 +3329,33 @@ class Transition implements BLASTSyncEngine.TransactionReadyListener {
                  change.setSnapshot(info.mSnapshot, info.mSnapshotLuma);
              }
  
@@ -10499,7 +10499,7 @@ index 9569cdd73..57a4e4af6 100644
          return out;
      }
  
-@@ -3763,6 +3810,9 @@ class Transition implements BLASTSyncEngine.TransactionReadyListener {
+@@ -3769,6 +3816,9 @@ class Transition implements BLASTSyncEngine.TransactionReadyListener {
           */
          private static final int FLAG_BELOW_BACK_GESTURE_ANIMATION = 0x100;
  
@@ -10509,7 +10509,7 @@ index 9569cdd73..57a4e4af6 100644
          @IntDef(prefix = { "FLAG_" }, value = {
                  FLAG_NONE,
                  FLAG_SEAMLESS_ROTATION,
-@@ -3773,7 +3823,8 @@ class Transition implements BLASTSyncEngine.TransactionReadyListener {
+@@ -3779,7 +3829,8 @@ class Transition implements BLASTSyncEngine.TransactionReadyListener {
                  FLAG_CHANGE_MOVED_TO_TOP,
                  FLAG_CHANGE_CONFIG_AT_END,
                  FLAG_BACK_GESTURE_ANIMATION,
@@ -10519,7 +10519,7 @@ index 9569cdd73..57a4e4af6 100644
          })
          @Retention(RetentionPolicy.SOURCE)
          @interface ChangeInfoFlag {}
-@@ -3823,6 +3874,11 @@ class Transition implements BLASTSyncEngine.TransactionReadyListener {
+@@ -3829,6 +3880,11 @@ class Transition implements BLASTSyncEngine.TransactionReadyListener {
          @TransitionInfo.ChangeFlags
          int mReadyFlags;
  
@@ -10531,7 +10531,7 @@ index 9569cdd73..57a4e4af6 100644
          ChangeInfo(@NonNull WindowContainer origState) {
              mContainer = origState;
              mVisible = origState.isVisibleRequested();
-@@ -3889,7 +3945,7 @@ class Transition implements BLASTSyncEngine.TransactionReadyListener {
+@@ -3895,7 +3951,7 @@ class Transition implements BLASTSyncEngine.TransactionReadyListener {
                  return TRANSIT_TO_FRONT;
              }
              final boolean nowVisible = wc.isVisibleRequested();
@@ -10540,7 +10540,7 @@ index 9569cdd73..57a4e4af6 100644
                  return TRANSIT_CHANGE;
              }
              if (mExistenceChanged) {
-@@ -4002,7 +4058,7 @@ class Transition implements BLASTSyncEngine.TransactionReadyListener {
+@@ -4008,7 +4064,7 @@ class Transition implements BLASTSyncEngine.TransactionReadyListener {
              if ((mFlags & FLAG_CHANGE_CONFIG_AT_END) != 0) {
                  flags |= FLAG_CONFIG_AT_END;
              }
@@ -10549,7 +10549,7 @@ index 9569cdd73..57a4e4af6 100644
          }
  
          /** Whether the container fills its parent Task bounds before and after the transition. */
-@@ -4020,6 +4076,32 @@ class Transition implements BLASTSyncEngine.TransactionReadyListener {
+@@ -4026,6 +4082,32 @@ class Transition implements BLASTSyncEngine.TransactionReadyListener {
              return isInvisibleOrFillingTaskBeforeTransition
                      && isInVisibleOrFillingTaskAfterTransition;
          }
@@ -10583,10 +10583,10 @@ index 9569cdd73..57a4e4af6 100644
  
      /**
 diff --git a/services/core/java/com/android/server/wm/TransitionController.java b/services/core/java/com/android/server/wm/TransitionController.java
-index 3d07a387f..660514bd7 100644
+index eace57ac2..89d412897 100644
 --- a/services/core/java/com/android/server/wm/TransitionController.java
 +++ b/services/core/java/com/android/server/wm/TransitionController.java
-@@ -935,9 +935,13 @@ class TransitionController {
+@@ -943,9 +943,13 @@ class TransitionController {
       * Requests transition for a window container which will be removed or invisible.
       * @return the new transition if it was created for this request, `null` otherwise.
       */
@@ -10601,7 +10601,7 @@ index 3d07a387f..660514bd7 100644
          if (!wc.isVisibleRequested()) return null;
          return requestStartTransition(createTransition(TRANSIT_CLOSE, 0 /* flags */), wc.asTask(),
                  null /* remoteTransition */, null /* displayChange */);
-@@ -977,7 +981,7 @@ class TransitionController {
+@@ -985,7 +989,7 @@ class TransitionController {
          transition.collectVisibleChange(wc);
          // Collect all visible tasks.
          wc.forAllLeafTasks(task -> {
@@ -10610,7 +10610,7 @@ index 3d07a387f..660514bd7 100644
                  transition.collect(task);
              }
          }, true /* traverseTopToBottom */);
-@@ -1087,6 +1091,7 @@ class TransitionController {
+@@ -1095,6 +1099,7 @@ class TransitionController {
              return;
          }
          ProtoLog.v(WmProtoLogGroups.WM_DEBUG_WINDOW_TRANSITIONS, "Finish Transition: %s", record);
@@ -11582,7 +11582,7 @@ index 000000000..b7d107543
 +    }
 +}
 diff --git a/services/core/java/com/android/server/wm/WindowManagerService.java b/services/core/java/com/android/server/wm/WindowManagerService.java
-index c3bad3eaa..301a29f53 100644
+index 9ad22aa5a..11882db96 100644
 --- a/services/core/java/com/android/server/wm/WindowManagerService.java
 +++ b/services/core/java/com/android/server/wm/WindowManagerService.java
 @@ -161,6 +161,8 @@ import static com.android.window.flags.Flags.enableDeviceStateAutoRotateSettingR
@@ -11616,7 +11616,7 @@ index c3bad3eaa..301a29f53 100644
          mSettingsObserver = new SettingsObserver();
  
          mSurfaceAnimationRunner = new SurfaceAnimationRunner(mTransactionFactory,
-@@ -3504,9 +3504,11 @@ public class WindowManagerService extends IWindowManager.Stub
+@@ -3510,9 +3510,11 @@ public class WindowManagerService extends IWindowManager.Stub
  
      @Override
      public void onUserSwitched() {
@@ -11628,7 +11628,7 @@ index c3bad3eaa..301a29f53 100644
          }
      }
  
-@@ -4072,7 +4074,8 @@ public class WindowManagerService extends IWindowManager.Stub
+@@ -4078,7 +4080,8 @@ public class WindowManagerService extends IWindowManager.Stub
                  // Otherwise, we'll update it when it's prepared.
                  final int forcedDensity = getForcedDisplayDensityForUserLocked(newUserId);
                  final int targetDensity = forcedDensity != 0
@@ -11638,7 +11638,7 @@ index c3bad3eaa..301a29f53 100644
                  displayContent.setForcedDensity(targetDensity, UserHandle.USER_CURRENT);
  
                  // Because DisplayWindowSettingsProvider.mOverrideSettings has been reset for
-@@ -5972,6 +5975,8 @@ public class WindowManagerService extends IWindowManager.Stub
+@@ -5978,6 +5981,8 @@ public class WindowManagerService extends IWindowManager.Stub
                  // Ignore, we cannot do anything if we failed to register VR mode listener
              }
          }
@@ -11647,7 +11647,7 @@ index c3bad3eaa..301a29f53 100644
      }
  
  
-@@ -6540,7 +6545,8 @@ public class WindowManagerService extends IWindowManager.Stub
+@@ -6546,7 +6551,8 @@ public class WindowManagerService extends IWindowManager.Stub
          synchronized (mGlobalLock) {
              final DisplayContent displayContent = mRoot.getDisplayContent(displayId);
              if (displayContent != null && displayContent.hasAccess(Binder.getCallingUid())) {
@@ -11657,7 +11657,7 @@ index c3bad3eaa..301a29f53 100644
              }
  
              DisplayInfo info = mDisplayManagerInternal.getDisplayInfo(displayId);
-@@ -6633,8 +6639,9 @@ public class WindowManagerService extends IWindowManager.Stub
+@@ -6639,8 +6645,9 @@ public class WindowManagerService extends IWindowManager.Stub
                  // Clear forced display density
                  final DisplayContent displayContent = mRoot.getDisplayContent(displayId);
                  if (displayContent != null) {
@@ -11965,10 +11965,10 @@ index 000000000..102fbacd2
 +    }
 +}
 diff --git a/services/core/java/com/android/server/wm/WindowState.java b/services/core/java/com/android/server/wm/WindowState.java
-index 2f25587ee..60fc8d945 100644
+index d3930d6c5..422f6fceb 100644
 --- a/services/core/java/com/android/server/wm/WindowState.java
 +++ b/services/core/java/com/android/server/wm/WindowState.java
-@@ -1250,6 +1250,8 @@ class WindowState extends WindowContainer<WindowState> implements WindowManagerP
+@@ -1252,6 +1252,8 @@ class WindowState extends WindowContainer<WindowState> implements WindowManagerP
          setDrawnStateEvaluated(false /*evaluated*/);
  
          getDisplayContent().reapplyMagnificationSpec();
@@ -11977,7 +11977,7 @@ index 2f25587ee..60fc8d945 100644
      }
  
      /** Returns the uid of the app that owns this window. */
-@@ -1652,6 +1654,10 @@ class WindowState extends WindowContainer<WindowState> implements WindowManagerP
+@@ -1654,6 +1656,10 @@ class WindowState extends WindowContainer<WindowState> implements WindowManagerP
          return mSession.mUid;
      }
  
@@ -11988,7 +11988,7 @@ index 2f25587ee..60fc8d945 100644
      Task getTask() {
          return mActivityRecord != null ? mActivityRecord.getTask() : null;
      }
-@@ -1930,7 +1936,7 @@ class WindowState extends WindowContainer<WindowState> implements WindowManagerP
+@@ -1932,7 +1938,7 @@ class WindowState extends WindowContainer<WindowState> implements WindowManagerP
       *         case when the surface is on screen but not exiting.
       */
      boolean canAffectSystemUiFlags() {
@@ -11997,7 +11997,7 @@ index 2f25587ee..60fc8d945 100644
              return false;
          }
          if (mActivityRecord == null) {
-@@ -2297,6 +2303,9 @@ class WindowState extends WindowContainer<WindowState> implements WindowManagerP
+@@ -2302,6 +2308,9 @@ class WindowState extends WindowContainer<WindowState> implements WindowManagerP
          super.removeImmediately();
  
          final DisplayContent dc = getDisplayContent();
@@ -12007,7 +12007,7 @@ index 2f25587ee..60fc8d945 100644
          if (isImeLayeringTarget()) {
              // Remove the attached IME screenshot.
              dc.removeImeScreenshotByTarget(this);
-@@ -2970,6 +2979,9 @@ class WindowState extends WindowContainer<WindowState> implements WindowManagerP
+@@ -2978,6 +2987,9 @@ class WindowState extends WindowContainer<WindowState> implements WindowManagerP
          if (mActivityRecord == null  || mActivityRecord.getTask() == null) {
              return true;
          }
