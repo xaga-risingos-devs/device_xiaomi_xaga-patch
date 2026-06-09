@@ -1,0 +1,27 @@
+From 5c976f4a48be1fcf0a8f02fec49a583fe25f273c Mon Sep 17 00:00:00 2001
+From: Mashopy <eliasgheeraert@gmail.com>
+Date: Mon, 18 May 2026 12:57:46 +0200
+Subject: [PATCH] check_boot_jars: Add xiaomi packages to the whitelist
+
+Change-Id: I6163d43081e4940da2e42aa15a39fb8f57b447fe
+---
+ scripts/check_boot_jars/package_allowed_list.txt | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/scripts/check_boot_jars/package_allowed_list.txt b/scripts/check_boot_jars/package_allowed_list.txt
+index 30952e1..283dda6 100644
+--- a/scripts/check_boot_jars/package_allowed_list.txt
++++ b/scripts/check_boot_jars/package_allowed_list.txt
+@@ -309,6 +309,9 @@ org.codeaurora.ims
+ org.codeaurora.internal
+ qcom.fmradio
+ 
++# Xiaomi adds
++com\.xiaomi\..*
++
+ ###################################################
+ # IFAA Manager used for Alipay and/or WeChat payment
+ org\.ifaa\.android\.manager.*
+-- 
+2.54.0
+
