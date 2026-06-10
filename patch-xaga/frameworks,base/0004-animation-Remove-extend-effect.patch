@@ -1,0 +1,107 @@
+From 022676940f6ffb5770910fe3f618da05670f220b Mon Sep 17 00:00:00 2001
+From: Hecheng Yu <kde-yyds@qq.com>
+Date: Wed, 10 Jun 2026 11:21:14 +0800
+Subject: [PATCH] animation: Remove extend effect
+
+---
+ core/res/res/anim/activity_close_enter.xml | 15 +--------------
+ core/res/res/anim/activity_close_exit.xml  | 13 -------------
+ core/res/res/anim/activity_open_enter.xml  | 13 -------------
+ core/res/res/anim/activity_open_exit.xml   | 15 +--------------
+ 4 files changed, 2 insertions(+), 54 deletions(-)
+
+diff --git a/core/res/res/anim/activity_close_enter.xml b/core/res/res/anim/activity_close_enter.xml
+index 22a1dd691..5175fc689 100644
+--- a/core/res/res/anim/activity_close_enter.xml
++++ b/core/res/res/anim/activity_close_enter.xml
+@@ -39,17 +39,4 @@
+         android:interpolator="@interpolator/fast_out_extra_slow_in"
+         android:startOffset="0"
+         android:duration="450" />
+-
+-    <extend
+-        android:fromExtendLeft="0"
+-        android:fromExtendTop="0"
+-        android:fromExtendRight="96dp"
+-        android:fromExtendBottom="0"
+-        android:toExtendLeft="0"
+-        android:toExtendTop="0"
+-        android:toExtendRight="96dp"
+-        android:toExtendBottom="0"
+-        android:interpolator="@interpolator/fast_out_extra_slow_in"
+-        android:startOffset="0"
+-        android:duration="450" />
+-</set>
+\ No newline at end of file
++</set>
+diff --git a/core/res/res/anim/activity_close_exit.xml b/core/res/res/anim/activity_close_exit.xml
+index 10ac35fb2..e22e48a80 100644
+--- a/core/res/res/anim/activity_close_exit.xml
++++ b/core/res/res/anim/activity_close_exit.xml
+@@ -40,17 +40,4 @@
+         android:interpolator="@interpolator/fast_out_extra_slow_in"
+         android:startOffset="0"
+         android:duration="450" />
+-
+-    <extend
+-        android:fromExtendLeft="96dp"
+-        android:fromExtendTop="0"
+-        android:fromExtendRight="0"
+-        android:fromExtendBottom="0"
+-        android:toExtendLeft="96dp"
+-        android:toExtendTop="0"
+-        android:toExtendRight="0"
+-        android:toExtendBottom="0"
+-        android:interpolator="@interpolator/fast_out_extra_slow_in"
+-        android:startOffset="0"
+-        android:duration="450" />
+ </set>
+diff --git a/core/res/res/anim/activity_open_enter.xml b/core/res/res/anim/activity_open_enter.xml
+index c999c0b18..d855b0249 100644
+--- a/core/res/res/anim/activity_open_enter.xml
++++ b/core/res/res/anim/activity_open_enter.xml
+@@ -38,17 +38,4 @@
+         android:fillAfter="true"
+         android:interpolator="@interpolator/fast_out_extra_slow_in"
+         android:duration="450" />
+-
+-    <extend
+-        android:fromExtendLeft="96dp"
+-        android:fromExtendTop="0"
+-        android:fromExtendRight="0"
+-        android:fromExtendBottom="0"
+-        android:toExtendLeft="96dp"
+-        android:toExtendTop="0"
+-        android:toExtendRight="0"
+-        android:toExtendBottom="0"
+-        android:interpolator="@interpolator/fast_out_extra_slow_in"
+-        android:startOffset="0"
+-        android:duration="450" />
+ </set>
+diff --git a/core/res/res/anim/activity_open_exit.xml b/core/res/res/anim/activity_open_exit.xml
+index d84827b83..1ba156fa7 100644
+--- a/core/res/res/anim/activity_open_exit.xml
++++ b/core/res/res/anim/activity_open_exit.xml
+@@ -38,17 +38,4 @@
+         android:interpolator="@interpolator/fast_out_extra_slow_in"
+         android:startOffset="0"
+         android:duration="450" />
+-
+-    <extend
+-        android:fromExtendLeft="0"
+-        android:fromExtendTop="0"
+-        android:fromExtendRight="96dp"
+-        android:fromExtendBottom="0"
+-        android:toExtendLeft="0"
+-        android:toExtendTop="0"
+-        android:toExtendRight="96dp"
+-        android:toExtendBottom="0"
+-        android:interpolator="@interpolator/fast_out_extra_slow_in"
+-        android:startOffset="0"
+-        android:duration="450" />
+-</set>
+\ No newline at end of file
++</set>
+-- 
+2.54.0
+
