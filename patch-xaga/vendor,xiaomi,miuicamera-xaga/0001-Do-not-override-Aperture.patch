@@ -1,0 +1,37 @@
+From cde558f13b924daad92af85cdc0b83835e2995d6 Mon Sep 17 00:00:00 2001
+From: Hecheng Yu <kde-yyds@qq.com>
+Date: Wed, 10 Jun 2026 11:28:20 +0800
+Subject: [PATCH] Do not override Aperture
+
+---
+ proprietary-files.txt | 2 +-
+ vendor/Android.bp     | 1 -
+ 2 files changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/proprietary-files.txt b/proprietary-files.txt
+index 7617dee..702f401 100644
+--- a/proprietary-files.txt
++++ b/proprietary-files.txt
+@@ -1,6 +1,6 @@
+ # All unpinned blobs below are extracted from xaga OS2.0.12.0.ULOCNXM
+ 
+-product/priv-app/MiuiCamera/MiuiCamera.apk:system/priv-app/MiuiCamera/MiuiCamera.apk;OVERRIDES=GoogleCamera,Camera2,Aperture,Flash
++product/priv-app/MiuiCamera/MiuiCamera.apk:system/priv-app/MiuiCamera/MiuiCamera.apk;OVERRIDES=GoogleCamera,Camera2,Flash
+ system_ext/lib64/libcamera_algoup_jni.xiaomi.so:system/lib64/libcamera_algoup_jni.xiaomi.so
+ system_ext/lib64/libcamera_mianode_jni.xiaomi.so:system/lib64/libcamera_mianode_jni.xiaomi.so
+ system_ext/lib64/libcamera_ispinterface_jni.xiaomi.so:system/lib64/libcamera_ispinterface_jni.xiaomi.so
+diff --git a/vendor/Android.bp b/vendor/Android.bp
+index d132500..5ffba2c 100644
+--- a/vendor/Android.bp
++++ b/vendor/Android.bp
+@@ -219,7 +219,6 @@ android_app_import {
+     overrides: [
+         "GoogleCamera",
+         "Camera2",
+-        "Aperture",
+         "Flash",
+     ],
+     certificate: "platform",
+-- 
+2.54.0
+
