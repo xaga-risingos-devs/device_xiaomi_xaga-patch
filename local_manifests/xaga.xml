@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+    <!-- Remotes -->
+    <remote name="github-custom" fetch="https://github.com" />
+    <remote name="gitlab-custom" fetch="https://gitlab.com" />
+
+    <!-- Device trees -->
+    <project path="device/xiaomi/xaga" remote="github-custom" revision="lineage-23.2" name="xaga-risingos-devs/android_device_xiaomi_xaga" />
+    <project path="device/xiaomi/mt6895-common" remote="github-custom" revision="lineage-23.2" name="xaga-risingos-devs/android_device_xiaomi_mt6895-common" />
+
+    <project path="vendor/xiaomi/xaga" remote="gitlab-custom" revision="16.2" name="priiii08918/android_vendor_xiaomi_xaga" />
+    <project path="vendor/xiaomi/mt6895-common" remote="github-custom" revision="16.2" name="XagaForge/android_vendor_xiaomi_mt6895-common" />
+
+    <!-- Hardware support -->
+    <project path="hardware/xiaomi" remote="github-custom" revision="lineage-23.2" name="xaga-risingos-devs/android_hardware_xiaomi" />
+
+    <!-- Kernel -->
+    <project path="kernel/xiaomi/mt6895" remote="github-custom" revision="lineage-23.2" name="xaga-risingos-devs/android_kernel_xiaomi_mt6895" />
+
+    <!-- Mediatek sepolicy & hardware -->
+    <project path="device/mediatek/sepolicy_vndr" remote="github-custom" revision="16.2" name="XagaForge/android_device_mediatek_sepolicy_vndr" />
+    <project path="hardware/mediatek" remote="github-custom" revision="16.2" name="XagaForge/android_hardware_mediatek" />
+
+    <!-- MIUI Camera proprietary blobs -->
+    <project path="vendor/xiaomi/miuicamera-xaga" remote="github-custom" revision="16.2" name="XagaForge/proprietary_vendor_xiaomi_miuicamera-xaga" />
+
+    <!-- GApps -->
+    <project path="vendor/gapps" remote="gitlab-custom" revision="baklava" name="MindTheGapps/vendor_gapps" />
+
+    <!-- Patches -->
+    <project path="patches-crdroid" remote="github-custom" revision="lineage-23.2" name="xaga-risingos-devs/patches-crdroid" />
+
+    <!-- Lindroid -->
+    <project path="vendor/lindroid" remote="github-custom" revision="lindroid-22.1" name="Linux-on-droid/vendor_lindroid" />
+    <project path="libhybris" remote="github-custom" revision="lindroid-21" name="Linux-on-droid/libhybris" />
+    <project path="external/lxc" remote="github-custom" revision="lindroid-21" name="Linux-on-droid/external_lxc" />
+    <project path="external/lindroid-drm-loopback" remote="github-custom" revision="master" name="Linux-on-droid/lindroid-drm-loopback" />
+
+    <!-- Dolby Atmos -->
+    <project path="packages/apps/DolbyAtmos" remote="github-custom" revision="16.0" name="crdroidandroid/android_packages_apps_DolbyAtmos" />
+
+</manifest>
