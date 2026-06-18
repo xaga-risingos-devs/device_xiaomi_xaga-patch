@@ -1,7 +1,7 @@
-From 96422a61483f27bfc219684df4dd71099ce54399 Mon Sep 17 00:00:00 2001
+From cae0028d9b6a0eb467118b1d8e2b44cbb4e34bc6 Mon Sep 17 00:00:00 2001
 From: ruyue <ruyueee@outlook.com>
 Date: Fri, 1 May 2026 18:29:01 +0800
-Subject: [PATCH 6/6] fixup! [SQUASHED]: Add Pop-Up View support
+Subject: [PATCH 5/5] fixup! [SQUASHED]: Add Pop-Up View support
 
 Change-Id: Ic5318e7bf795c1634bdc76c311c0ffa8c5ae0fbd
 ---

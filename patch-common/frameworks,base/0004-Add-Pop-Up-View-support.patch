@@ -1,7 +1,7 @@
-From 9cde0acb9e6be5b13c3a0ba5b15307c332a20476 Mon Sep 17 00:00:00 2001
+From 83d0684a2170832de62e6c1131f129fdb3c459bb Mon Sep 17 00:00:00 2001
 From: ruyue <ruyueee@outlook.com>
 Date: Mon, 13 Apr 2026 20:28:49 +0800
-Subject: [PATCH 5/6] Add Pop-Up View support
+Subject: [PATCH 4/5] Add Pop-Up View support
 
 squashe:
 - SDK: Port Pop-Up View feature from Nothing OS 2
@@ -428,7 +428,7 @@ index 000000000..c12ba23b9
 +    }
 +}
 diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
-index d80402421..4578c722c 100644
+index 0f74bbd4a..43f535a15 100644
 --- a/core/java/android/provider/Settings.java
 +++ b/core/java/android/provider/Settings.java
 @@ -5383,6 +5383,38 @@ public final class Settings {
@@ -470,7 +470,7 @@ index d80402421..4578c722c 100644
          /**
           * Control lock behavior on fold
           *
-@@ -15368,6 +15400,13 @@ public final class Settings {
+@@ -15380,6 +15412,13 @@ public final class Settings {
          @Readable
          public static final String UNLOCK_SOUND = "unlock_sound";
  
