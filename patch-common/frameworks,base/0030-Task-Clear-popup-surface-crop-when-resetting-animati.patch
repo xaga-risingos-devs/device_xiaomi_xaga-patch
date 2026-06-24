@@ -1,0 +1,31 @@
+From 64ba13181b88123bab36ac754b14b88629858a74 Mon Sep 17 00:00:00 2001
+From: uwu-gl <moegluwu0@gmail.com>
+Date: Thu, 21 May 2026 23:07:31 +0800
+Subject: [PATCH 30/43] Task: Clear popup surface crop when resetting animation
+ leash
+
+---
+ services/core/java/com/android/server/wm/Task.java | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/services/core/java/com/android/server/wm/Task.java b/services/core/java/com/android/server/wm/Task.java
+index 50e0dc55a..fc6ffd07b 100644
+--- a/services/core/java/com/android/server/wm/Task.java
++++ b/services/core/java/com/android/server/wm/Task.java
+@@ -7223,6 +7223,13 @@ class Task extends TaskFragment {
+         if (getWindowConfiguration().isPopUpWindowMode() ||
+                 PopUpWindowController.getInstance().isTryExitWindowingMode()) {
+             t.setScale(mSurfaceControl, 1.0f, 1.0f);
++            t.setWindowCrop(mSurfaceControl, -1, -1);
++            final SurfaceControl.Transaction syncTransaction = getSyncTransaction();
++            if (t != syncTransaction) {
++                // Avoid a later sync transaction restoring stale popup transform/crop state.
++                syncTransaction.setScale(mSurfaceControl, 1.0f, 1.0f);
++                syncTransaction.setWindowCrop(mSurfaceControl, -1, -1);
++            }
+         }
+     }
+ }
+-- 
+2.54.0
+

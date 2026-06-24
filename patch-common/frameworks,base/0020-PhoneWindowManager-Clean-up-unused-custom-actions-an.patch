@@ -1,0 +1,26 @@
+From 478c6e1f89a02219633fc6fb1db6533bfbd77fa9 Mon Sep 17 00:00:00 2001
+From: ruyue <ruyueee@outlook.com>
+Date: Thu, 22 Jan 2026 15:33:30 +0800
+Subject: [PATCH 20/43] PhoneWindowManager: Clean up unused custom actions and
+ system prepare callbacks
+
+Change-Id: I2ffc7eb919ddfcb8ec17306aad4e9750385a2c3e
+---
+ .../core/java/com/android/server/policy/PhoneWindowManager.java  | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/services/core/java/com/android/server/policy/PhoneWindowManager.java b/services/core/java/com/android/server/policy/PhoneWindowManager.java
+index 85a01c225..2116e5647 100644
+--- a/services/core/java/com/android/server/policy/PhoneWindowManager.java
++++ b/services/core/java/com/android/server/policy/PhoneWindowManager.java
+@@ -7240,7 +7240,6 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+         //Ext add
+         updateGestureParams();
+         mDisplayManager.registerDisplayListener(mDisplayListener, mHandler);
+-        mModifierShortcutManager.onSystemReady();
+ 
+         if (mContext.getResources().getBoolean(com.android.internal.R.bool.config_pocketModeSupported)) {
+             mPocketManager = (PocketManager) mContext.getSystemService(Context.POCKET_SERVICE);
+-- 
+2.54.0
+

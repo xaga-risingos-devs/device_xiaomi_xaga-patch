@@ -1,0 +1,39 @@
+From 98ab0ad2ba554d18bc6e8123cd5f801a50a7a4fb Mon Sep 17 00:00:00 2001
+From: ruyue <ruyueee@outlook.com>
+Date: Fri, 7 Nov 2025 18:28:54 +0800
+Subject: [PATCH 19/43] PhoneWindowManager: Support custom gesture areas
+
+Change-Id: Iedaf2f87790aca979cae1d1e2e23a86da70097d7
+---
+ .../com/android/server/policy/PhoneWindowManager.java     | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/services/core/java/com/android/server/policy/PhoneWindowManager.java b/services/core/java/com/android/server/policy/PhoneWindowManager.java
+index 82c0857af..85a01c225 100644
+--- a/services/core/java/com/android/server/policy/PhoneWindowManager.java
++++ b/services/core/java/com/android/server/policy/PhoneWindowManager.java
+@@ -432,8 +432,8 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+     private static final String TAG_GESTURE = "AviumGesture";
+     private static final String ACTION_WINDOWMODE_LEFT = "org.avium.WINDOWMODE_LEFT";
+     private static final String ACTION_WINDOWMODE_RIGHT = "org.avium.WINDOWMODE_RIGHT";
+-    private static final float GESTURE_AREA_HEIGHT_DP = 20.0f; 
+-    private static final float GESTURE_AREA_WIDTH_DP = 30.0f; 
++    private static float GESTURE_AREA_HEIGHT_DP = 20.0f; 
++    private static float GESTURE_AREA_WIDTH_DP = 30.0f; 
+ 
+     private static final boolean AVIUM_DEBUG = false;
+ 
+@@ -7220,6 +7220,10 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+             mDisplayHeight = size.y;
+         }
+         float density = mContext.getResources().getDisplayMetrics().density;
++        GESTURE_AREA_HEIGHT_DP = Float.parseFloat(
++        SystemProperties.get("persist.avium.gesture_area_height_dp", String.valueOf(GESTURE_AREA_HEIGHT_DP)));
++        GESTURE_AREA_WIDTH_DP = Float.parseFloat(
++            SystemProperties.get("persist.avium.gesture_area_width_dp", String.valueOf(GESTURE_AREA_WIDTH_DP)));
+         mMinGestureDistancePx = TRIGGER_MIN_DISTANCE_DP * density;
+         mGestureAreaHeightPx  = GESTURE_AREA_HEIGHT_DP  * density;
+         mGestureAreaWidthPx   = GESTURE_AREA_WIDTH_DP   * density;
+-- 
+2.54.0
+

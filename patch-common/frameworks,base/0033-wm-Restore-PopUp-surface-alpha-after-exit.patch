@@ -1,0 +1,51 @@
+From 568d21a1671579b0ca86c9f800033b5d275e6b6e Mon Sep 17 00:00:00 2001
+From: uwu-gl <moegluwu0@gmail.com>
+Date: Wed, 27 May 2026 23:19:49 +0800
+Subject: [PATCH 33/43] wm: Restore PopUp surface alpha after exit
+
+---
+ services/core/java/com/android/server/wm/Task.java             | 3 +++
+ .../core/java/com/android/server/wm/TaskWindowSurfaceInfo.java | 1 +
+ 2 files changed, 4 insertions(+)
+
+diff --git a/services/core/java/com/android/server/wm/Task.java b/services/core/java/com/android/server/wm/Task.java
+index fc6ffd07b..8af74ac02 100644
+--- a/services/core/java/com/android/server/wm/Task.java
++++ b/services/core/java/com/android/server/wm/Task.java
+@@ -6416,6 +6416,7 @@ class Task extends TaskFragment {
+ 
+     void resetSurfaceControlTransforms() {
+         getSyncTransaction().setMatrix(mSurfaceControl, Matrix.IDENTITY_MATRIX, new float[9])
++                .setAlpha(mSurfaceControl, 1.0f)
+                 .setWindowCrop(mSurfaceControl, null)
+                 .setShadowRadius(mSurfaceControl, 0)
+                 .setCornerRadius(mSurfaceControl, 0);
+@@ -7222,11 +7223,13 @@ class Task extends TaskFragment {
+         super.resetSurfacePositionForAnimationLeash(t);
+         if (getWindowConfiguration().isPopUpWindowMode() ||
+                 PopUpWindowController.getInstance().isTryExitWindowingMode()) {
++            t.setAlpha(mSurfaceControl, 1.0f);
+             t.setScale(mSurfaceControl, 1.0f, 1.0f);
+             t.setWindowCrop(mSurfaceControl, -1, -1);
+             final SurfaceControl.Transaction syncTransaction = getSyncTransaction();
+             if (t != syncTransaction) {
+                 // Avoid a later sync transaction restoring stale popup transform/crop state.
++                syncTransaction.setAlpha(mSurfaceControl, 1.0f);
+                 syncTransaction.setScale(mSurfaceControl, 1.0f, 1.0f);
+                 syncTransaction.setWindowCrop(mSurfaceControl, -1, -1);
+             }
+diff --git a/services/core/java/com/android/server/wm/TaskWindowSurfaceInfo.java b/services/core/java/com/android/server/wm/TaskWindowSurfaceInfo.java
+index 7afe10572..65e4721fd 100644
+--- a/services/core/java/com/android/server/wm/TaskWindowSurfaceInfo.java
++++ b/services/core/java/com/android/server/wm/TaskWindowSurfaceInfo.java
+@@ -356,6 +356,7 @@ class TaskWindowSurfaceInfo {
+                     bound, displayBound, mWindowCenterPosition, mWindowSurfaceScale,
+                     false, pos);
+             t.setPosition(mTask.mSurfaceControl, pos.x, pos.y)
++                    .setAlpha(mTask.mSurfaceControl, 1.0f)
+                     .setWindowCrop(mTask.mSurfaceControl, bound.width(), bound.height())
+                     .setCornerRadius(mTask.mSurfaceControl, mCornerRadius)
+                     .setScale(mTask.mSurfaceControl, getWindowSurfaceRealScale(), getWindowSurfaceRealScale());
+-- 
+2.54.0
+

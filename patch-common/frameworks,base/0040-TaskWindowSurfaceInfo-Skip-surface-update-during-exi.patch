@@ -1,0 +1,50 @@
+From 29b24f5f577f8fbce1e40ebdb4eb78d4c2586d09 Mon Sep 17 00:00:00 2001
+From: likw <1912283462@qq.com>
+Date: Fri, 5 Jun 2026 20:43:52 +0800
+Subject: [PATCH 40/43] TaskWindowSurfaceInfo: Skip surface update during exit
+ animation
+
+---
+ .../java/com/android/server/wm/TaskWindowSurfaceInfo.java    | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/services/core/java/com/android/server/wm/TaskWindowSurfaceInfo.java b/services/core/java/com/android/server/wm/TaskWindowSurfaceInfo.java
+index 65e4721fd..ffa35f457 100644
+--- a/services/core/java/com/android/server/wm/TaskWindowSurfaceInfo.java
++++ b/services/core/java/com/android/server/wm/TaskWindowSurfaceInfo.java
+@@ -52,6 +52,7 @@ class TaskWindowSurfaceInfo {
+     private float mMiniWindowCornerRadius;
+ 
+     private boolean mMute = false;
++    private boolean mIsExiting = false;
+ 
+     private float mWindowSurfaceScale;
+     private float mWindowSurfaceScaleFactor;
+@@ -246,6 +247,7 @@ class TaskWindowSurfaceInfo {
+                     + winConfig.getWindowingMode() + " mTask=" + mTask);
+         }
+         if (!isPopUpWindow && isPrevPopUpWindow) {
++            mIsExiting = false;
+             final IWindow window = getIWindow();
+             if (window != null) {
+                 finishTaskPositioning(window);
+@@ -345,7 +347,7 @@ class TaskWindowSurfaceInfo {
+                 mPopUpAnimationController.isAnimating() ||
+                 mTask.mTransitionController.isPlaying();
+         if (ownsPopUpSurface() && winConfig.isPopUpWindowMode() && !hasAnimationLeash &&
+-                !isWindowPositioningLocked()) {
++                !isWindowPositioningLocked() && !mIsExiting) {
+             final Rect displayBound = new Rect();
+             if (mTask.mDisplayContent != null) {
+                 mTask.mDisplayContent.getBounds(displayBound);
+@@ -375,6 +377,7 @@ class TaskWindowSurfaceInfo {
+ 
+     void playExitAnimation(boolean isFromLeaveButton, float startScale,
+             PopUpAnimationController.OnAnimationEndCallback callback) {
++        mIsExiting = true;
+         mPopUpAnimationController.playExitAnimation(
+                 isFromLeaveButton, startScale, callback);
+     }
+-- 
+2.54.0
+

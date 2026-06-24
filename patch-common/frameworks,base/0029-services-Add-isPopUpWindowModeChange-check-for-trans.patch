@@ -1,0 +1,68 @@
+From a9b7f448933f92c006acc8c08950c694a8a1bc47 Mon Sep 17 00:00:00 2001
+From: uwu-gl <moegluwu0@gmail.com>
+Date: Sat, 16 May 2026 12:37:11 +0800
+Subject: [PATCH 29/43] services: Add isPopUpWindowModeChange() check for
+ transition changes
+
+This fixes the issue of missing animations when switching apps
+
+Signed-off-by: uwu-gl <moegluwu0@gmail.com>
+---
+ .../java/com/android/server/wm/Transition.java   |  6 +++---
+ .../com/android/server/wm/TransitionInfoExt.java | 16 +++++++++++++++-
+ 2 files changed, 18 insertions(+), 4 deletions(-)
+
+diff --git a/services/core/java/com/android/server/wm/Transition.java b/services/core/java/com/android/server/wm/Transition.java
+index e38ec6c10..256c36444 100644
+--- a/services/core/java/com/android/server/wm/Transition.java
++++ b/services/core/java/com/android/server/wm/Transition.java
+@@ -3951,9 +3951,9 @@ class Transition implements BLASTSyncEngine.TransactionReadyListener {
+                 return TRANSIT_TO_FRONT;
+             }
+             final boolean nowVisible = wc.isVisibleRequested();
+-            if (nowVisible == mVisible
+-                    || PopUpWindowController.getInstance().isLaunchPopUpViewFromRecents()
+-                    || PopUpWindowController.getInstance().isLaunchPopUpViewFromGesture()) {
++            final boolean isPopUpWindowingModeChange = PopUpWindowController.getInstance()
++                    .shouldStartChangeTransition(mWindowingMode, wc.getWindowingMode());
++            if (nowVisible == mVisible || isPopUpWindowingModeChange) {
+                 return TRANSIT_CHANGE;
+             }
+             if (mExistenceChanged) {
+diff --git a/services/core/java/com/android/server/wm/TransitionInfoExt.java b/services/core/java/com/android/server/wm/TransitionInfoExt.java
+index d8ab678a4..3758207e5 100644
+--- a/services/core/java/com/android/server/wm/TransitionInfoExt.java
++++ b/services/core/java/com/android/server/wm/TransitionInfoExt.java
+@@ -96,7 +96,9 @@ public class TransitionInfoExt {
+                 info.mTask.getBounds(mPopUpViewInfo.mStartDragBounds);
+             }
+         }
+-        if (info.mTask != null && PopUpWindowController.getInstance().hasPendingPopUpViewLaunchPoint()) {
++        if (info.mTask != null
++                && PopUpWindowController.getInstance().hasPendingPopUpViewLaunchPoint()
++                && isPopUpWindowModeChange(freezeInfo, info)) {
+             overrideStartStateForGestureLaunch(info, displayInfo);
+         }
+         if (DEBUG_POP_UP) {
+@@ -104,6 +106,18 @@ public class TransitionInfoExt {
+         }
+     }
+ 
++    private boolean isPopUpWindowModeChange(TaskWindowSurfaceInfo freezeInfo,
++            TaskWindowSurfaceInfo info) {
++        final int startWindowingMode = freezeInfo.mFreezedWindowingMode != WINDOWING_MODE_UNDEFINED
++                ? freezeInfo.mFreezedWindowingMode
++                : freezeInfo.mTask.getConfiguration().windowConfiguration.getWindowingMode();
++        final int endWindowingMode = info.mFreezedWindowingMode != WINDOWING_MODE_UNDEFINED
++                ? info.mFreezedWindowingMode
++                : info.mTask.getConfiguration().windowConfiguration.getWindowingMode();
++        return PopUpWindowController.getInstance().shouldStartChangeTransition(
++                startWindowingMode, endWindowingMode);
++    }
++
+     private void overrideStartStateForGestureLaunch(TaskWindowSurfaceInfo info, DisplayInfo displayInfo) {
+         final Task task = info.mTask;
+         if (task == null) {
+-- 
+2.54.0
+

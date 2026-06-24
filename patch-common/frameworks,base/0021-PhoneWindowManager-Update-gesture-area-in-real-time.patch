@@ -1,0 +1,46 @@
+From cb90a050a7686813e3d08c9349d0e08cdd939f26 Mon Sep 17 00:00:00 2001
+From: ruyue <ruyueee@outlook.com>
+Date: Sat, 31 Jan 2026 17:17:47 +0800
+Subject: [PATCH 21/43] PhoneWindowManager: Update gesture area in real time
+
+Change-Id: Iea6cfe1627084fcd628c887abf46595e77f26aaf
+---
+ .../android/server/policy/PhoneWindowManager.java | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/services/core/java/com/android/server/policy/PhoneWindowManager.java b/services/core/java/com/android/server/policy/PhoneWindowManager.java
+index 2116e5647..d0fbd6b42 100644
+--- a/services/core/java/com/android/server/policy/PhoneWindowManager.java
++++ b/services/core/java/com/android/server/policy/PhoneWindowManager.java
+@@ -6306,6 +6306,18 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+         }
+     };
+ 
++    BroadcastReceiver mGestureSettingsReceiver = new BroadcastReceiver() {
++        @Override
++        public void onReceive(Context context, Intent intent) {
++            if ("org.avium.UPDATE_GESTURE_SETTINGS".equals(intent.getAction())) {
++                if (AVIUM_DEBUG) {
++                    Slog.d(TAG_GESTURE, "Received gesture settings update broadcast");
++                }
++                updateGestureParams();
++            }
++        }
++    };
++
+     @Override
+     public void startedWakingUpGlobal(@WakeReason int reason) {
+ 
+@@ -7239,6 +7251,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+         mKeyguardDelegate.onSystemReady();
+         //Ext add
+         updateGestureParams();
++        IntentFilter gestureSettingsFilter = new IntentFilter("org.avium.UPDATE_GESTURE_SETTINGS");
++        mContext.registerReceiver(mGestureSettingsReceiver, gestureSettingsFilter,
++                Context.RECEIVER_NOT_EXPORTED);
+         mDisplayManager.registerDisplayListener(mDisplayListener, mHandler);
+ 
+         if (mContext.getResources().getBoolean(com.android.internal.R.bool.config_pocketModeSupported)) {
+-- 
+2.54.0
+

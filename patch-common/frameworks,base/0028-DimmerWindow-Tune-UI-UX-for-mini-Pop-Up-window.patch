@@ -1,0 +1,383 @@
+From bdd9a8c4acb4e2a846bcec9aef50d7b5d75a19a6 Mon Sep 17 00:00:00 2001
+From: uwu-gl <moegluwu0@gmail.com>
+Date: Tue, 12 May 2026 00:30:38 +0800
+Subject: [PATCH 28/43] DimmerWindow: Tune UI/UX for mini Pop-Up window
+
+Change-Id: Ida3935dcc433252948ee05b025d478e7aec2b362
+Signed-off-by: uwu-gl <moegluwu0@gmail.com>
+---
+ .../com/android/server/wm/DimmerWindow.java   | 235 ++++++++++++++++--
+ 1 file changed, 217 insertions(+), 18 deletions(-)
+
+diff --git a/services/core/java/com/android/server/wm/DimmerWindow.java b/services/core/java/com/android/server/wm/DimmerWindow.java
+index 9f510c8fd..2cf723b05 100644
+--- a/services/core/java/com/android/server/wm/DimmerWindow.java
++++ b/services/core/java/com/android/server/wm/DimmerWindow.java
+@@ -33,10 +33,12 @@ import android.view.MotionEvent;
+ import android.view.View;
+ import android.view.ViewConfiguration;
+ import android.view.ViewTreeObserver;
++import android.view.VelocityTracker;
+ import android.view.WindowInsetsController;
+ import android.view.WindowManager;
+ import android.view.WindowManager.LayoutParams;
+ import android.widget.FrameLayout;
++import android.widget.OverScroller;
+ 
+ import com.android.server.UiThread;
+ 
+@@ -52,9 +54,9 @@ class DimmerWindow {
+     private static final int WINDOW_STATE_EXPANDED = 0;
+     private static final int WINDOW_STATE_MINIMIZED = 1;
+ 
+-    private static final int LEGACY_DISMISS_TARGET_WIDTH_DP = 132;
+-    private static final int LEGACY_DISMISS_TARGET_HEIGHT_DP = 36;
+-    private static final int LEGACY_DISMISS_TARGET_TOP_MARGIN_DP = 24;
++    private static final int LEGACY_DISMISS_TARGET_SIZE_DP = 72;
++    private static final int LEGACY_DISMISS_TARGET_BOTTOM_MARGIN_DP = 40;
++    private static final int LEGACY_DISMISS_TARGET_MAGNET_RADIUS_DP = 120;
+     private static final float LEGACY_MINIMIZED_SCALE = 0.36f;
+     private static final int DEFAULT_TOP_BAR_LIGHT_COLOR = 0xFFFFFFFF;
+     private static final int DEFAULT_TOP_BAR_DARK_COLOR = 0xFF1C1C17;
+@@ -126,19 +128,44 @@ class DimmerWindow {
+         private boolean mHasMoved = false;
+ 
+         private final int mTouchSlop;
++        private final int mMinimumFlingVelocity;
++        private final int mMaximumFlingVelocity;
++        private final OverScroller mMiniFlingScroller;
+ 
+         private int mLegacyBarDownX;
+         private int mLegacyBarDownY;
+         private int mLegacyDragDownX;
+         private int mLegacyDragDownY;
+         private final Rect mLegacyDragStartBounds = new Rect();
++        private final Rect mMiniMovementBounds = new Rect();
+         private boolean mLegacyDragging;
++        private boolean mLegacyStuckToDismiss;
+         private final Rect mDefaultDragStartBounds = new Rect();
++        private VelocityTracker mMiniVelocityTracker;
++        private boolean mDismissTargetVisible;
++        private final Runnable mMiniFlingRunnable = new Runnable() {
++            @Override
++            public void run() {
++                if (!mMiniFlingScroller.computeScrollOffset()) {
++                    finishMiniWindowFling();
++                    return;
++                }
++                final Rect newBounds = new Rect(mDrawingRect);
++                newBounds.offsetTo(mMiniFlingScroller.getCurrX(), mMiniFlingScroller.getCurrY());
++                updateLayout(newBounds);
++                moveTaskSurface(newBounds.centerX(), newBounds.centerY());
++                postOnAnimation(this);
++            }
++        };
+ 
+         DimView(Context context, float initialScale) {
+             super(context);
+             setWillNotDraw(false);
+-            mTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
++            final ViewConfiguration viewConfiguration = ViewConfiguration.get(context);
++            mTouchSlop = viewConfiguration.getScaledTouchSlop();
++            mMinimumFlingVelocity = viewConfiguration.getScaledMinimumFlingVelocity();
++            mMaximumFlingVelocity = viewConfiguration.getScaledMaximumFlingVelocity();
++            mMiniFlingScroller = new OverScroller(context);
+             mOldConfig = new Configuration(context.getResources().getConfiguration());
+             initUI(initialScale);
+         }
+@@ -158,10 +185,13 @@ class DimmerWindow {
+             mLegacyDismissTarget = new View(getContext());
+             GradientDrawable dismissDrawable = new GradientDrawable();
+             dismissDrawable.setColor(0xCCFFFFFF);
+-            dismissDrawable.setCornerRadius(dpToPx(LEGACY_DISMISS_TARGET_HEIGHT_DP) / 2f);
++            dismissDrawable.setCornerRadius(dpToPx(LEGACY_DISMISS_TARGET_SIZE_DP) / 2f);
++            dismissDrawable.setStroke(dpToPx(2), 0x26FFFFFF);
+             mLegacyDismissTarget.setBackground(dismissDrawable);
+             mLegacyDismissTarget.setVisibility(GONE);
+-            mLegacyDismissTarget.setAlpha(0.9f);
++            mLegacyDismissTarget.setAlpha(0.0f);
++            mLegacyDismissTarget.setScaleX(0.85f);
++            mLegacyDismissTarget.setScaleY(0.85f);
+ 
+             mGestureDetector = new GestureDetector(getContext(),
+                     new GestureDetector.SimpleOnGestureListener() {
+@@ -202,8 +232,8 @@ class DimmerWindow {
+                     dpToPx(TOUCH_AREA_HEIGHT_DP)));
+             addView(mTopBar, new FrameLayout.LayoutParams(mTopBarWidth, mTopBarHeight));
+             addView(mLegacyDismissTarget, new FrameLayout.LayoutParams(
+-                    dpToPx(LEGACY_DISMISS_TARGET_WIDTH_DP),
+-                    dpToPx(LEGACY_DISMISS_TARGET_HEIGHT_DP)));
++                    dpToPx(LEGACY_DISMISS_TARGET_SIZE_DP),
++                    dpToPx(LEGACY_DISMISS_TARGET_SIZE_DP)));
+ 
+             setupTopBarTouchListener();
+             getViewTreeObserver().addOnComputeInternalInsetsListener(this::updateTouchableRegion);
+@@ -423,8 +453,8 @@ class DimmerWindow {
+             mTopBarTouchArea.setLayoutParams(lpTouch);
+ 
+             FrameLayout.LayoutParams dismissLp = (FrameLayout.LayoutParams) mLegacyDismissTarget.getLayoutParams();
+-            dismissLp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+-            dismissLp.topMargin = dpToPx(LEGACY_DISMISS_TARGET_TOP_MARGIN_DP);
++            dismissLp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
++            dismissLp.bottomMargin = dpToPx(LEGACY_DISMISS_TARGET_BOTTOM_MARGIN_DP);
+             mLegacyDismissTarget.setLayoutParams(dismissLp);
+ 
+             if (isMinimizedState()) {
+@@ -554,10 +584,50 @@ class DimmerWindow {
+             if (mLegacyDismissTarget == null) {
+                 return;
+             }
+-            mLegacyDismissTarget.setVisibility(visible ? VISIBLE : GONE);
+-            GradientDrawable drawable = (GradientDrawable) mLegacyDismissTarget.getBackground();
++            final GradientDrawable drawable = (GradientDrawable) mLegacyDismissTarget.getBackground();
+             drawable.setColor(highlighted ? 0xFFE53935 : 0xCCFFFFFF);
+-            mLegacyDismissTarget.setAlpha(highlighted ? 1.0f : 0.9f);
++            drawable.setStroke(dpToPx(2), highlighted ? 0x44FFFFFF : 0x26FFFFFF);
++            if (visible && !mDismissTargetVisible) {
++                mLegacyDismissTarget.animate().cancel();
++                mLegacyDismissTarget.setVisibility(VISIBLE);
++                mLegacyDismissTarget.setScaleX(0.85f);
++                mLegacyDismissTarget.setScaleY(0.85f);
++                mLegacyDismissTarget.setAlpha(0.0f);
++                mLegacyDismissTarget.animate()
++                        .alpha(1.0f)
++                        .scaleX(highlighted ? 1.08f : 1.0f)
++                        .scaleY(highlighted ? 1.08f : 1.0f)
++                        .setDuration(180)
++                        .start();
++            } else if (visible) {
++                mLegacyDismissTarget.animate().cancel();
++                mLegacyDismissTarget.setVisibility(VISIBLE);
++                mLegacyDismissTarget.animate()
++                        .alpha(1.0f)
++                        .scaleX(highlighted ? 1.08f : 1.0f)
++                        .scaleY(highlighted ? 1.08f : 1.0f)
++                        .setDuration(120)
++                        .start();
++            } else if (mDismissTargetVisible) {
++                mLegacyDismissTarget.animate().cancel();
++                mLegacyDismissTarget.animate()
++                        .alpha(0.0f)
++                        .scaleX(0.85f)
++                        .scaleY(0.85f)
++                        .setDuration(140)
++                        .withEndAction(() -> {
++                            if (mLegacyDismissTarget != null) {
++                                mLegacyDismissTarget.setVisibility(GONE);
++                            }
++                        })
++                        .start();
++            } else {
++                mLegacyDismissTarget.setVisibility(GONE);
++                mLegacyDismissTarget.setAlpha(0.0f);
++                mLegacyDismissTarget.setScaleX(0.85f);
++                mLegacyDismissTarget.setScaleY(0.85f);
++            }
++            mDismissTargetVisible = visible;
+             invalidate();
+         }
+ 
+@@ -588,13 +658,18 @@ class DimmerWindow {
+         private boolean handleMinimizedTouch(MotionEvent event) {
+             switch (event.getActionMasked()) {
+                 case MotionEvent.ACTION_DOWN:
++                    stopMiniWindowFling();
++                    ensureMiniVelocityTracker().clear();
++                    mMiniVelocityTracker.addMovement(event);
+                     DimmerWindowManager.getInstance().setActiveTask(mTask);
+                     mLegacyDragDownX = (int) event.getRawX();
+                     mLegacyDragDownY = (int) event.getRawY();
+                     mLegacyDragStartBounds.set(mDrawingRect);
+                     mLegacyDragging = false;
++                    mLegacyStuckToDismiss = false;
+                     return true;
+                 case MotionEvent.ACTION_MOVE:
++                    ensureMiniVelocityTracker().addMovement(event);
+                     final int moveX = (int) event.getRawX();
+                     final int moveY = (int) event.getRawY();
+                     if (!mLegacyDragging) {
+@@ -605,38 +680,156 @@ class DimmerWindow {
+                         }
+                     }
+                     if (mLegacyDragging) {
+-                        final Rect newBounds = new Rect(mLegacyDragStartBounds);
+-                        newBounds.offset(moveX - mLegacyDragDownX, moveY - mLegacyDragDownY);
++                        final Rect newBounds = computeDraggedMiniBounds(moveX, moveY);
+                         updateLayout(newBounds);
+                         moveTaskSurface(newBounds.centerX(), newBounds.centerY());
+-                        setLegacyDismissTargetVisible(true,
+-                                isInLegacyDismissTarget(event.getRawX(), event.getRawY()));
+                     }
+                     return true;
+                 case MotionEvent.ACTION_UP:
++                    ensureMiniVelocityTracker().addMovement(event);
+                     if (mLegacyDragging) {
+-                        final boolean dismiss = isInLegacyDismissTarget(event.getRawX(), event.getRawY());
++                        final boolean dismiss = mLegacyStuckToDismiss
++                                || isInLegacyDismissTarget(event.getRawX(), event.getRawY());
+                         setLegacyDismissTargetVisible(false, false);
+                         mLegacyDragging = false;
++                        mLegacyStuckToDismiss = false;
+                         if (dismiss) {
++                            recycleMiniVelocityTracker();
+                             moveActivityTaskToBack();
+                         } else {
+                             rememberMinimizedCenter(mDrawingRect.centerX(), mDrawingRect.centerY());
+                             PopUpWindowController.getInstance().setMiniWindowInputFocus(false);
++                            startMiniWindowFlingIfNeeded();
+                         }
+                     } else {
++                        recycleMiniVelocityTracker();
+                         switchToWindowState(WINDOW_STATE_EXPANDED);
+                     }
+                     return true;
+                 case MotionEvent.ACTION_CANCEL:
++                    ensureMiniVelocityTracker().addMovement(event);
+                     setLegacyDismissTargetVisible(false, false);
+                     mLegacyDragging = false;
++                    mLegacyStuckToDismiss = false;
++                    recycleMiniVelocityTracker();
+                     return true;
+                 default:
+                     return false;
+             }
+         }
+ 
++        private Rect computeDraggedMiniBounds(int moveX, int moveY) {
++            final Rect newBounds = new Rect(mLegacyDragStartBounds);
++            newBounds.offset(moveX - mLegacyDragDownX, moveY - mLegacyDragDownY);
++            if (!isNearLegacyDismissTarget(newBounds.centerX(), newBounds.centerY())) {
++                mLegacyStuckToDismiss = false;
++                setLegacyDismissTargetVisible(true, false);
++                return clampMiniBounds(newBounds);
++            }
++
++            mLegacyStuckToDismiss = true;
++            setLegacyDismissTargetVisible(true, true);
++            final int targetCenterX = mLegacyDismissTarget.getLeft() + (mLegacyDismissTarget.getWidth() / 2);
++            final int targetCenterY = mLegacyDismissTarget.getTop() + (mLegacyDismissTarget.getHeight() / 2);
++            newBounds.offsetTo(targetCenterX - (newBounds.width() / 2),
++                    targetCenterY - (newBounds.height() / 2));
++            return clampMiniBounds(newBounds);
++        }
++
++        private Rect clampMiniBounds(Rect bounds) {
++            if (bounds == null || bounds.isEmpty()) {
++                return bounds;
++            }
++            updateMiniMovementBounds(bounds.width(), bounds.height());
++            bounds.offsetTo(
++                    clamp(bounds.left, mMiniMovementBounds.left, mMiniMovementBounds.right),
++                    clamp(bounds.top, mMiniMovementBounds.top, mMiniMovementBounds.bottom));
++            return bounds;
++        }
++
++        private void updateMiniMovementBounds(int width, int height) {
++            final int availableWidth = Math.max(0, getWidth() - width);
++            final int availableHeight = Math.max(0, getHeight() - height);
++            mMiniMovementBounds.set(0, 0, availableWidth, availableHeight);
++        }
++
++        private boolean isNearLegacyDismissTarget(int centerX, int centerY) {
++            if (mLegacyDismissTarget.getVisibility() != VISIBLE) {
++                return false;
++            }
++            final int targetCenterX = mLegacyDismissTarget.getLeft() + (mLegacyDismissTarget.getWidth() / 2);
++            final int targetCenterY = mLegacyDismissTarget.getTop() + (mLegacyDismissTarget.getHeight() / 2);
++            final float distance = (float) Math.hypot(centerX - targetCenterX, centerY - targetCenterY);
++            return distance <= dpToPx(LEGACY_DISMISS_TARGET_MAGNET_RADIUS_DP);
++        }
++
++        private void startMiniWindowFlingIfNeeded() {
++            if (mDrawingRect.isEmpty()) {
++                recycleMiniVelocityTracker();
++                return;
++            }
++            final VelocityTracker velocityTracker = mMiniVelocityTracker;
++            if (velocityTracker == null) {
++                return;
++            }
++            velocityTracker.computeCurrentVelocity(1000, mMaximumFlingVelocity);
++            final int velocityX = Math.round(velocityTracker.getXVelocity());
++            final int velocityY = Math.round(velocityTracker.getYVelocity());
++            recycleMiniVelocityTracker();
++            if (Math.max(Math.abs(velocityX), Math.abs(velocityY)) < mMinimumFlingVelocity) {
++                return;
++            }
++            updateMiniMovementBounds(mDrawingRect.width(), mDrawingRect.height());
++            mMiniFlingScroller.fling(
++                    mDrawingRect.left,
++                    mDrawingRect.top,
++                    velocityX,
++                    velocityY,
++                    mMiniMovementBounds.left,
++                    mMiniMovementBounds.right,
++                    mMiniMovementBounds.top,
++                    mMiniMovementBounds.bottom);
++            postOnAnimation(mMiniFlingRunnable);
++        }
++
++        private void stopMiniWindowFling() {
++            if (!mMiniFlingScroller.isFinished()) {
++                mMiniFlingScroller.abortAnimation();
++            }
++            removeCallbacks(mMiniFlingRunnable);
++        }
++
++        private void finishMiniWindowFling() {
++            removeCallbacks(mMiniFlingRunnable);
++            if (!mDrawingRect.isEmpty()) {
++                rememberMinimizedCenter(mDrawingRect.centerX(), mDrawingRect.centerY());
++            }
++        }
++
++        private VelocityTracker ensureMiniVelocityTracker() {
++            if (mMiniVelocityTracker == null) {
++                mMiniVelocityTracker = VelocityTracker.obtain();
++            }
++            return mMiniVelocityTracker;
++        }
++
++        private void recycleMiniVelocityTracker() {
++            if (mMiniVelocityTracker != null) {
++                mMiniVelocityTracker.recycle();
++                mMiniVelocityTracker = null;
++            }
++        }
++
++        private int clamp(int value, int min, int max) {
++            if (value < min) {
++                return min;
++            }
++            if (value > max) {
++                return max;
++            }
++            return value;
++        }
++
+         @Override
+         public void onConfigurationChanged(Configuration newConfig) {
+             super.onConfigurationChanged(newConfig);
+@@ -695,6 +888,9 @@ class DimmerWindow {
+     }
+ 
+     void destroy() {
++        if (mDimView != null) {
++            mDimView.stopMiniWindowFling();
++        }
+         mUiHandler.post(() -> {
+             if (mIsWindowAdded && mDimView != null && getWindowManager() != null) {
+                 getWindowManager().removeView(mDimView);
+@@ -923,6 +1119,9 @@ class DimmerWindow {
+     }
+ 
+     private void switchToWindowState(int targetState) {
++        if (mDimView != null) {
++            mDimView.stopMiniWindowFling();
++        }
+         mWindowState = targetState;
+         applyWindowState(true);
+     }
+-- 
+2.54.0
+

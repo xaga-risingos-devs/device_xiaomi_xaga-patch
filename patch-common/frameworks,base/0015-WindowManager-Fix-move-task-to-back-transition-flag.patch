@@ -1,0 +1,26 @@
+From f7bacb6ab3ba1fa81361794b4be70e0823a8039b Mon Sep 17 00:00:00 2001
+From: uwu-gl <moegluwu0@gmail.com>
+Date: Sun, 26 Apr 2026 17:25:31 +0800
+Subject: [PATCH 15/43] WindowManager: Fix move-task-to-back transition flag
+
+Use the correct transition flag when a pop-up task moves to back so later transition handling can distinguish the path from a normal close.
+---
+ core/java/android/view/WindowManager.java | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/core/java/android/view/WindowManager.java b/core/java/android/view/WindowManager.java
+index 3b3d53e86..bf8cf71fb 100644
+--- a/core/java/android/view/WindowManager.java
++++ b/core/java/android/view/WindowManager.java
+@@ -642,7 +642,7 @@ public interface WindowManager extends ViewManager {
+      * Transition flag: Indicates that task is moved to back.
+      * @hide
+      */
+-    int TRANSIT_FLAG_MOVE_TASK_TO_BACK = (1 << 15); // 0x8000
++    int TRANSIT_FLAG_MOVE_TASK_TO_BACK = (1 << 18); // 0x40000
+ 
+     /**
+      * Display IME Policy: The IME should appear on a fallback display.
+-- 
+2.54.0
+

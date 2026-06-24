@@ -1,0 +1,553 @@
+From 181e13bd57a16a921c6ffc71d261f5719e17323e Mon Sep 17 00:00:00 2001
+From: uwu-gl <moegluwu0@gmail.com>
+Date: Sun, 7 Jun 2026 16:16:32 +0800
+Subject: [PATCH 09/43] wm: Rewrite Pop-Up View UX
+
+---
+ .../com/android/server/wm/DimmerWindow.java   | 326 +++---------------
+ .../server/wm/PopUpWindowController.java      |   4 +-
+ 2 files changed, 43 insertions(+), 287 deletions(-)
+
+diff --git a/services/core/java/com/android/server/wm/DimmerWindow.java b/services/core/java/com/android/server/wm/DimmerWindow.java
+index 0ea3a0ef5..6db502cd7 100644
+--- a/services/core/java/com/android/server/wm/DimmerWindow.java
++++ b/services/core/java/com/android/server/wm/DimmerWindow.java
+@@ -1,6 +1,7 @@
+ /*
+  * Copyright (C) 2023-2024 The Nameless-AOSP Project
+  * Copyright (C) 2026 The RisingOS Revived Project
++ * Copyright (C) 2026 The uwuAOSP Project
+  * SPDX-License-Identifier: Apache-2.0
+  */
+ 
+@@ -15,15 +16,12 @@ import static android.view.WindowManager.LayoutParams.TYPE_MINI_WINDOW_DIMMER;
+ 
+ import static com.android.server.wm.PopUpWindowController.MOVE_TO_BACK_TOUCH_OUTSIDE;
+ 
+-import static org.rising.DebugConstants.DEBUG_POP_UP;
++import static com.android.internal.util.android.DebugConstants.DEBUG_POP_UP;
+ 
+-import android.animation.TimeInterpolator;
+ import android.app.ActivityThread;
+ import android.content.Context;
+ import android.content.res.Configuration;
+-import android.graphics.Canvas;
+ import android.graphics.Color;
+-import android.graphics.Paint;
+ import android.graphics.Point;
+ import android.graphics.Rect;
+ import android.graphics.RectF;
+@@ -32,6 +30,7 @@ import android.graphics.drawable.GradientDrawable;
+ import android.os.Handler;
+ import android.os.Looper;
+ import android.util.Slog;
++import android.view.GestureDetector;
+ import android.view.Gravity;
+ import android.view.MotionEvent;
+ import android.view.View;
+@@ -39,16 +38,11 @@ import android.view.ViewTreeObserver;
+ import android.view.WindowManager;
+ import android.view.WindowManager.LayoutParams;
+ import android.widget.FrameLayout;
+-import android.widget.ImageView;
+-import android.widget.LinearLayout;
+-import android.widget.PopupMenu;
+-import android.widget.TextView;
+ 
+-import com.android.internal.R;
+ import com.android.server.UiThread;
+ 
+ /**
+- * Minimal decoration window with thin top bar and menu for Pop-Up View.
++ * Minimal decoration window with thin drag bar for Pop-Up View.
+  */
+ class DimmerWindow {
+ 
+@@ -97,25 +91,22 @@ class DimmerWindow {
+         private View mResizeHandleTopLeft;
+         private View mResizeHandleTopRight;
+ 
+-        private FrameLayout mMenuOverlay;
++        private GestureDetector mGestureDetector;
+ 
+         private int mTopBarHeight;
+         private int mTopBarWidth;
+-        private int mCornerRadius;
+-
+         // Constants
+         private static final int BASE_TOP_BAR_HEIGHT_DP = 6;
+         private static final int BASE_TOP_BAR_WIDTH_DP = 120;
+-        private static final int BASE_CORNER_RADIUS_DP = 12;
+ 
+         private static final float FOCUSED_ALPHA = 1.0f;
+         private static final float UNFOCUSED_ALPHA = 0.4f;
+-        private static final int LONG_PRESS_TIMEOUT_MS = 500;
+ 
+         private static final int TOUCH_AREA_HEIGHT_DP = 48;
+         private static final int TOUCH_AREA_EXTRA_WIDTH_DP = 20;
+ 
+         private boolean isOrientationChanged = false;
++        private boolean mHasMoved = false;
+ 
+ 
+         DimView(Context context, float initialScale) {
+@@ -128,7 +119,6 @@ class DimmerWindow {
+             float uiScale = Math.max(0.3f, initialScale);
+             mTopBarHeight = (int) (dpToPx(BASE_TOP_BAR_HEIGHT_DP) * uiScale);
+             mTopBarWidth = (int) (dpToPx(BASE_TOP_BAR_WIDTH_DP) * uiScale);
+-            mCornerRadius = (int) (dpToPx(BASE_CORNER_RADIUS_DP) * uiScale);
+ 
+             // Create pill-shaped visual top bar (small)
+             mTopBar = new View(getContext());
+@@ -143,9 +133,29 @@ class DimmerWindow {
+             mTopBarTouchArea.setBackgroundColor(Color.TRANSPARENT);
+             // Don't set background - completely invisible
+ 
+-            // Create menu overlay
+-            mMenuOverlay = new FrameLayout(getContext());
+-            mMenuOverlay.setVisibility(GONE);
++            mGestureDetector = new GestureDetector(getContext(),
++                    new GestureDetector.SimpleOnGestureListener() {
++                        @Override
++                        public boolean onDown(MotionEvent e) {
++                            return true;
++                        }
++
++                        @Override
++                        public void onLongPress(MotionEvent e) {
++                            if (!mHasMoved) {
++                                moveActivityTaskToBack();
++                            }
++                        }
++
++                        @Override
++                        public boolean onDoubleTap(MotionEvent e) {
++                            if (!mHasMoved) {
++                                PopUpWindowController.getInstance().exitMiniWindowingMode();
++                                return true;
++                            }
++                            return false;
++                        }
++                    });
+ 
+             // Create 4 Resize Handles (all corners)
+             mResizeHandleBottomLeft = new View(getContext());
+@@ -163,8 +173,6 @@ class DimmerWindow {
+                     dpToPx(BASE_TOP_BAR_WIDTH_DP + TOUCH_AREA_EXTRA_WIDTH_DP * 2),
+                     dpToPx(TOUCH_AREA_HEIGHT_DP)));
+             addView(mTopBar, new FrameLayout.LayoutParams(mTopBarWidth, mTopBarHeight));
+-            addView(mMenuOverlay, new FrameLayout.LayoutParams(
+-                    LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT));
+ 
+             // Setup touch handling on LARGER touch area
+             setupTopBarTouchListener();
+@@ -179,13 +187,6 @@ class DimmerWindow {
+                             mTopBarTouchArea.getRight(), mTopBarTouchArea.getBottom(),
+                             Region.Op.UNION);
+ 
+-                    // Add Menu Overlay if visible
+-                    if (mMenuOverlay.getVisibility() == VISIBLE) {
+-                        region.op(mMenuOverlay.getLeft(), mMenuOverlay.getTop(),
+-                                mMenuOverlay.getRight(), mMenuOverlay.getBottom(),
+-                                Region.Op.UNION);
+-                    }
+-
+                     // Add Resize Handles
+                     addHandleToRegion(region, mResizeHandleBottomLeft);
+                     addHandleToRegion(region, mResizeHandleBottomRight);
+@@ -206,11 +207,13 @@ class DimmerWindow {
+                 private int initX, initY; // Initial touch position
+                 private int lastX, lastY; // Last touch position (to calculate movement)
+                 private Rect startBounds;
+-                private boolean hasMoved = false;
+                 private float moveDistance = 0; // Total moved distance in pixels
+ 
+                 @Override
+                 public boolean onTouch(View v, MotionEvent event) {
++                    if (mGestureDetector != null) {
++                        mGestureDetector.onTouchEvent(event);
++                    }
+                     switch (event.getAction()) {
+                         case MotionEvent.ACTION_DOWN:
+                             initX = (int) event.getRawX();
+@@ -218,13 +221,12 @@ class DimmerWindow {
+                             lastX = initX; // Initialize last touch position
+                             lastY = initY;
+                             startBounds = new Rect(mDrawingRect);
+-                            hasMoved = false;
++                            mHasMoved = false;
+                             PopUpWindowController.getInstance().triggerVibrate();
+                             moveDistance = 0; // Reset move distance
+                             return true;
+ 
+                         case MotionEvent.ACTION_MOVE:
+-                            DimmerWindow.getInstance().hideMenu();
+                             int dx = (int) event.getRawX() - lastX;
+                             int dy = (int) event.getRawY() - lastY;
+ 
+@@ -241,10 +243,10 @@ class DimmerWindow {
+                             lastY = (int) event.getRawY();
+ 
+                             if (Math.abs(lastX - initX) > 10 || Math.abs(lastY - initY) > 10) {
+-                                hasMoved = true;
++                                mHasMoved = true;
+                             }
+ 
+-                            if (startBounds != null && hasMoved) {
++                            if (startBounds != null && mHasMoved) {
+                                 Rect newBounds = new Rect(startBounds);
+                                 newBounds.offset(lastX - initX, lastY - initY);
+                                 updateLayout(newBounds);
+@@ -253,27 +255,14 @@ class DimmerWindow {
+                             return true;
+ 
+                         case MotionEvent.ACTION_UP:
+-                            if (!hasMoved) {
+-                                if (DEBUG_POP_UP) {
+-                                    Slog.d(TAG, "Top bar clicked, showing menu");
+-                                }
+-                                PopUpWindowController.getInstance().triggerVibrate();
+-
+-                                post(() -> {
+-                                    if (DEBUG_POP_UP) {
+-                                        Slog.d(TAG, "Executing showCustomMenu on UI thread");
+-                                    }
+-                                    showCustomMenu();
+-                                });
+-                            }
+                             startBounds = null;
+-                            hasMoved = false;
++                            mHasMoved = false;
+                             moveDistance = 0; // Reset distance after drag ends
+                             return true;
+ 
+                         case MotionEvent.ACTION_CANCEL:
+                             startBounds = null;
+-                            hasMoved = false;
++                            mHasMoved = false;
+                             moveDistance = 0; // Reset distance on cancel
+                             return true;
+                     }
+@@ -282,214 +271,6 @@ class DimmerWindow {
+             });
+         }
+ 
+-        private static class OutExpoInterpolator implements TimeInterpolator {
+-            @Override
+-            public float getInterpolation(float input) {
+-                // Exponential out: fast at start, slow at end
+-                // Formula: 1 - 2^(-10 * x)
+-                return input == 1.0f ? 1.0f : 1.0f - (float) Math.pow(2, -10 * input);
+-            }
+-        }
+-
+-        private void showCustomMenu() {
+-            mMenuOverlay.removeAllViews();
+-
+-            // Container for menu + triangle
+-            LinearLayout menuContainer = new LinearLayout(getContext());
+-            menuContainer.setOrientation(LinearLayout.VERTICAL);
+-            menuContainer.setGravity(Gravity.CENTER_HORIZONTAL);
+-
+-            // Menu items container - HORIZONTAL layout for side-by-side buttons
+-            LinearLayout menuItems = new LinearLayout(getContext());
+-            menuItems.setOrientation(LinearLayout.HORIZONTAL);
+-            menuItems.setGravity(Gravity.CENTER);
+-
+-            GradientDrawable menuBg = new GradientDrawable();
+-            menuBg.setColor(0xE0222222);
+-            menuBg.setCornerRadius(dpToPx(12));
+-            menuItems.setBackground(menuBg);
+-            menuItems.setPadding(dpToPx(16), dpToPx(16), dpToPx(16), dpToPx(16));
+-
+-            // Force minimum size for menuItems
+-            menuItems.setMinimumWidth(dpToPx(140));
+-            menuItems.setMinimumHeight(dpToPx(72));
+-
+-            // Add menu buttons
+-            View btnMaximize = createMenuButton("Maximize",
+-                    com.android.internal.R.drawable.popup_view_maximize, () -> {
+-                hideCustomMenu();
+-                PopUpWindowController.getInstance().exitMiniWindowingMode();
+-            });
+-
+-            View btnMinimize = createMenuButton("Minimize",
+-                    com.android.internal.R.drawable.popup_view_minimize, () -> {
+-                hideCustomMenu();
+-                moveActivityTaskToBack();
+-            });
+-
+-            menuItems.addView(btnMaximize);
+-            menuItems.addView(btnMinimize);
+-
+-            // Triangle pointer
+-            TriangleView triangle = new TriangleView(getContext());
+-            triangle.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(20), dpToPx(10)));
+-
+-            // Add to container
+-            menuContainer.addView(menuItems, new LinearLayout.LayoutParams(
+-                    LinearLayout.LayoutParams.WRAP_CONTENT,
+-                    LinearLayout.LayoutParams.WRAP_CONTENT));
+-            menuContainer.addView(triangle);
+-
+-            // Add to overlay with temporary position for measurement
+-            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+-                    LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
+-
+-            mMenuOverlay.addView(menuContainer, lp);
+-
+-            int widthSpec = View.MeasureSpec.makeMeasureSpec(dpToPx(200), View.MeasureSpec.AT_MOST);
+-            int heightSpec = View.MeasureSpec.makeMeasureSpec(dpToPx(150), View.MeasureSpec.AT_MOST);
+-            menuContainer.measure(widthSpec, heightSpec);
+-            menuContainer.layout(0, 0, menuContainer.getMeasuredWidth(), menuContainer.getMeasuredHeight());
+-
+-            int menuWidth = menuContainer.getMeasuredWidth();
+-            int menuHeight = menuContainer.getMeasuredHeight();
+-
+-            // Get bar's center position in DimView coordinates
+-            int barCenterX = mTopBar.getLeft() + (mTopBar.getWidth() / 2);
+-            int barTop = mTopBar.getTop();
+-
+-            // Center menu horizontally on the bar
+-            lp.leftMargin = barCenterX - (menuWidth / 2);
+-
+-            // Position above the bar with gap
+-            lp.topMargin = barTop - menuHeight - dpToPx(8);
+-
+-            menuContainer.setLayoutParams(lp);
+-
+-            mMenuOverlay.setVisibility(VISIBLE);
+-
+-            // ANIMATION: Fade in + Swipe up
+-            int swipeDistance = dpToPx(20); // Swipe up 20dp
+-
+-            mMenuOverlay.setAlpha(0f);
+-            mMenuOverlay.setTranslationY(swipeDistance); // Start below final position
+-
+-            mMenuOverlay.animate()
+-                    .alpha(1f)
+-                    .translationY(0f) // End at final position
+-                    .setDuration(300)
+-                    .setInterpolator(new OutExpoInterpolator())
+-                    .start();
+-
+-            // Tap outside to dismiss
+-            mMenuOverlay.setOnClickListener(v -> {
+-                if (DEBUG_POP_UP) {
+-                    Slog.d(TAG, "Menu overlay clicked, hiding");
+-                }
+-                hideCustomMenu();
+-            });
+-
+-            requestLayout();
+-        }
+-
+-        private View createMenuButton(String contentDescription, int drawableRes, Runnable onClick) {
+-            FrameLayout button = new FrameLayout(getContext());
+-            button.setClickable(true);
+-            button.setFocusable(true);
+-
+-            int buttonSize = dpToPx(56);
+-
+-            // Explicit layout params for LinearLayout parent
+-            LinearLayout.LayoutParams buttonLp = new LinearLayout.LayoutParams(buttonSize, buttonSize);
+-            button.setLayoutParams(buttonLp);
+-
+-            // Ripple effect
+-            android.content.res.TypedArray ta = getContext().obtainStyledAttributes(
+-                    new int[]{android.R.attr.selectableItemBackgroundBorderless});
+-            button.setBackground(ta.getDrawable(0));
+-            ta.recycle();
+-
+-            // Icon with explicit size and visibility
+-            ImageView icon = new ImageView(getContext());
+-            icon.setContentDescription(contentDescription);
+-            icon.setImageResource(drawableRes);
+-            icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+-            icon.setVisibility(View.VISIBLE); // Force visible
+-
+-            // Get the drawable
+-            android.graphics.drawable.Drawable drawable = icon.getDrawable();
+-
+-            // Explicit size for icon
+-            FrameLayout.LayoutParams iconLp = new FrameLayout.LayoutParams(
+-                    dpToPx(40), dpToPx(40));
+-            iconLp.gravity = Gravity.CENTER;
+-            icon.setLayoutParams(iconLp);
+-
+-            button.addView(icon);
+-
+-            button.setOnClickListener(v -> {
+-                PopUpWindowController.getInstance().triggerVibrate();
+-                onClick.run();
+-            });
+-            if (DEBUG_POP_UP) {
+-                Slog.d(TAG, "Created button: " + contentDescription +
+-                            ", buttonSize=" + buttonSize +
+-                            ", layoutParams=" + button.getLayoutParams());
+-            }
+-            return button;
+-        }
+-
+-        private void hideCustomMenu() {
+-            if (mMenuOverlay.getVisibility() != VISIBLE) {
+-                return;
+-            }
+-
+-            // ANIMATION: Fade out + Swipe down
+-            int swipeDistance = dpToPx(20); // Swipe down 20dp
+-
+-            mMenuOverlay.animate()
+-                    .alpha(0f)
+-                    .translationY(swipeDistance) // Move down from current position
+-                    .setDuration(250)
+-                    .setInterpolator(new OutExpoInterpolator())
+-                    .withEndAction(() -> {
+-                        // Hide and reset after animation completes
+-                        mMenuOverlay.setVisibility(GONE);
+-                        mMenuOverlay.removeAllViews();
+-                        mMenuOverlay.setTranslationY(0f); // Reset translation
+-                        mMenuOverlay.setOnClickListener(null);
+-                    })
+-                    .start();
+-        }
+-
+-        // Custom triangle view for pointer
+-        private class TriangleView extends View {
+-            private Paint paint;
+-
+-            public TriangleView(Context context) {
+-                super(context);
+-                paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+-                paint.setColor(0xE0222222); // Match menu background
+-                paint.setStyle(Paint.Style.FILL);
+-            }
+-
+-            @Override
+-            protected void onDraw(Canvas canvas) {
+-                super.onDraw(canvas);
+-
+-                int width = getWidth();
+-                int height = getHeight();
+-
+-                android.graphics.Path path = new android.graphics.Path();
+-                path.moveTo(width / 2f, height); // Bottom point (pointing down)
+-                path.lineTo(0, 0); // Top left
+-                path.lineTo(width, 0); // Top right
+-                path.close();
+-
+-                canvas.drawPath(path, paint);
+-            }
+-        }
+-
+         private void addHandleToRegion(Region region, View handle) {
+             if (handle.getVisibility() == VISIBLE) {
+                 region.op(handle.getLeft(), handle.getTop(),
+@@ -512,8 +293,6 @@ class DimmerWindow {
+                 public boolean onTouch(View v, MotionEvent event) {
+                     switch (event.getAction()) {
+                         case MotionEvent.ACTION_DOWN:
+-                            hideCustomMenu();
+-
+                             // Get current scale from task
+                             if (mLastDimmerTask != null) {
+                                 TaskWindowSurfaceInfo info = mLastDimmerTask.mWindowContainerExt
+@@ -706,7 +485,7 @@ class DimmerWindow {
+             lpBar.width = mTopBarWidth;
+             lpBar.height = mTopBarHeight;
+             lpBar.leftMargin = taskBounds.centerX() - (mTopBarWidth / 2);
+-            lpBar.topMargin = taskBounds.top - mTopBarHeight - dpToPx(4);
++            lpBar.topMargin = taskBounds.bottom + dpToPx(4);
+             mTopBar.setLayoutParams(lpBar);
+ 
+             // Position touch area
+@@ -759,10 +538,6 @@ class DimmerWindow {
+             mResizeHandleTopLeft.setVisibility(VISIBLE);
+             mResizeHandleTopRight.setVisibility(VISIBLE);
+ 
+-            if (mMenuOverlay.getVisibility() == VISIBLE) {
+-                hideCustomMenu();
+-            }
+-
+             // Force views to update
+             mTopBar.requestLayout();
+             mTopBarTouchArea.requestLayout();
+@@ -779,7 +554,6 @@ class DimmerWindow {
+ 
+             mTopBarHeight = (int) (dpToPx(BASE_TOP_BAR_HEIGHT_DP) * uiScale);
+             mTopBarWidth = (int) (dpToPx(BASE_TOP_BAR_WIDTH_DP) * uiScale);
+-            mCornerRadius = (int) (dpToPx(BASE_CORNER_RADIUS_DP) * uiScale);
+ 
+             // Update visual bar
+             GradientDrawable topBarDrawable = new GradientDrawable();
+@@ -820,15 +594,6 @@ class DimmerWindow {
+             }
+         }
+ 
+-        public void hideMenuIfVisible() {
+-            if (mMenuOverlay != null && mMenuOverlay.getVisibility() == VISIBLE) {
+-                if (DEBUG_POP_UP) {
+-                    Slog.d(TAG, "Hiding menu");
+-                }
+-                hideCustomMenu();
+-            }
+-        }
+-
+         @Override
+         public void onConfigurationChanged(Configuration newConfig) {
+             super.onConfigurationChanged(newConfig);
+@@ -1046,10 +811,11 @@ class DimmerWindow {
+         int touchHeight = dpToPx(DimView.TOUCH_AREA_HEIGHT_DP);
+         int extraWidth = dpToPx(DimView.TOUCH_AREA_EXTRA_WIDTH_DP);
+ 
+-        // Expand top to include the expanded touch area
+-        int barVisualTop = mDimView.mDrawingRect.top - barHeight - dpToPx(4); // Visual bar position
++        // Expand bottom to include the expanded touch area
++        int barVisualTop = mDimView.mDrawingRect.bottom + dpToPx(4); // Visual bar position
+         int touchTop = barVisualTop - (touchHeight - barHeight) / 2; // Center touch area on visual
+-        decoratedBounds.top = touchTop;
++        int touchBottom = touchTop + touchHeight;
++        decoratedBounds.bottom = Math.max(decoratedBounds.bottom, touchBottom);
+ 
+         // Expand left/right to include extra width
+         int taskCenterX = mDimView.mDrawingRect.centerX();
+@@ -1109,14 +875,6 @@ class DimmerWindow {
+         }
+     }
+ 
+-    public void hideMenu() {
+-        mUiHandler.post(() -> {
+-            if (mDimView != null) {
+-                mDimView.hideMenuIfVisible();
+-            }
+-        });
+-    }
+-
+     private int dpToPx(int dp) {
+         return (int) (dp * mUiContext.getResources().getDisplayMetrics().density);
+     }
+diff --git a/services/core/java/com/android/server/wm/PopUpWindowController.java b/services/core/java/com/android/server/wm/PopUpWindowController.java
+index cdfb2dc04..0e0f3a7b2 100644
+--- a/services/core/java/com/android/server/wm/PopUpWindowController.java
++++ b/services/core/java/com/android/server/wm/PopUpWindowController.java
+@@ -1,6 +1,7 @@
+ /*
+  * Copyright (C) 2023-2024 The Nameless-AOSP Project
+  * Copyright (C) 2026 The RisingOS Revived Project
++ * Copyright (C) 2026 The uwuAOSP Project
+  * SPDX-License-Identifier: Apache-2.0
+  */
+ 
+@@ -926,9 +927,6 @@ public class PopUpWindowController {
+                     ", inMiniWindow=" + inMiniWindow);
+             }
+ 
+-
+-            DimmerWindow.getInstance().hideMenu();
+-
+             if (inMiniWindow) {
+                 setMiniWindowInputFocus(true);
+             } else {
+-- 
+2.54.0
+

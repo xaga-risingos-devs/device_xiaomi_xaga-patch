@@ -1,0 +1,368 @@
+From 2cb488f735ecc3f4cd2d15f1b41db6e990d6ca4c Mon Sep 17 00:00:00 2001
+From: uwu-gl <moegluwu0@gmail.com>
+Date: Thu, 30 Apr 2026 02:29:55 +0800
+Subject: [PATCH 23/43] PopUpSettingsConfig: Migrate Pop-Up View settings to
+ SettingsProvider
+
+Move Pop-Up View settings into SettingsProvider with backup and validation support so controller state comes from one persistent source. This replaces the older scattered storage path.
+
+Change-Id: Iefa00f21d6f895dcaf2885f578517c77fe441aa4
+---
+ core/java/android/provider/Settings.java      | 58 ++++++++++++++++++-
+ .../settings/backup/SystemSettings.java       | 10 +++-
+ .../validators/SystemSettingsValidators.java  | 14 +++++
+ .../row/NotificationContentView.java          | 12 +++-
+ .../server/policy/PhoneWindowManager.java     | 46 +++++++--------
+ .../server/wm/DimmerWindowManager.java        | 17 ++++--
+ .../server/wm/PopUpWindowController.java      |  9 +++
+ 7 files changed, 133 insertions(+), 33 deletions(-)
+
+diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
+index 85ccca1c3..f4027cbf6 100644
+--- a/core/java/android/provider/Settings.java
++++ b/core/java/android/provider/Settings.java
+@@ -5383,23 +5383,75 @@ public final class Settings {
+         @Readable
+         public static final String PEAK_REFRESH_RATE = "peak_refresh_rate";
+ 
++        /**
++         * Whether the quick menu gesture for Pop-Up View is enabled.
++         * @hide
++         */
++        public static final String POP_UP_VIEW_QUICK_MENU_GESTURE_ENABLED =
++                "pop_up_view_quick_menu_gesture_enabled";
++
++        /**
++         * Selected quick menu apps for Pop-Up View, encoded as a package-name list.
++         * @hide
++         */
++        public static final String POP_UP_VIEW_QUICK_MENU_SELECTED_APPS =
++                "pop_up_view_quick_menu_selected_apps";
++
++        /**
++         * Width of the quick menu gesture trigger area in dp.
++         * @hide
++         */
++        public static final String POP_UP_VIEW_QUICK_MENU_GESTURE_AREA_WIDTH_DP =
++                "pop_up_view_quick_menu_gesture_area_width_dp";
++
++        /**
++         * Height of the quick menu gesture trigger area in dp.
++         * @hide
++         */
++        public static final String POP_UP_VIEW_QUICK_MENU_GESTURE_AREA_HEIGHT_DP =
++                "pop_up_view_quick_menu_gesture_area_height_dp";
++
++        /**
++         * Whether the Pop-Up View entry is shown in notifications.
++         * @hide
++         */
++        public static final String POP_UP_NOTIFICATION_ENTRY_ENABLED =
++                "pop_up_notification_entry_enabled";
++
++        /**
++         * Launch mode used by the notification Pop-Up View entry.
++         * @hide
++         */
++        public static final String POP_UP_NOTIFICATION_LAUNCH_MODE =
++                "pop_up_notification_launch_mode";
++
+         /**
+          * Whether to use Pop-Up Window for notification app jump in portrait mode
+          * @hide
+          */
+-        public static final String POP_UP_NOTIFICATION_JUMP_PORTRAIT = "pop_up_notification_jump_portrait";
++        public static final String POP_UP_NOTIFICATION_JUMP_PORTRAIT =
++                "pop_up_notification_jump_portrait";
+ 
+         /**
+          * Whether to use Pop-Up Window for notification app jump in landscape mode
+          * @hide
+          */
+-        public static final String POP_UP_NOTIFICATION_JUMP_LANDSCAPE = "pop_up_notification_jump_landscape";
++        public static final String POP_UP_NOTIFICATION_JUMP_LANDSCAPE =
++                "pop_up_notification_jump_landscape";
+ 
+         /**
+          * Blacklist apps that disallow from opening notification in Pop-Up View
+          * @hide
+          */
+-        public static final String POP_UP_NOTIFICATION_BLACKLIST = "pop_up_notification_blacklist";
++        public static final String POP_UP_NOTIFICATION_BLACKLIST =
++                "pop_up_notification_blacklist";
++
++        /**
++         * Whether multiple Pop-Up Views can stay visible at the same time.
++         * @hide
++         */
++        public static final String POP_UP_VIEW_ALLOW_MULTIPLE =
++                "pop_up_view_allow_multiple";
+ 
+         /**
+          * Controls the Pop-Up View interaction UI mode.
+diff --git a/packages/SettingsProvider/src/android/provider/settings/backup/SystemSettings.java b/packages/SettingsProvider/src/android/provider/settings/backup/SystemSettings.java
+index 1698e20c1..17741327a 100644
+--- a/packages/SettingsProvider/src/android/provider/settings/backup/SystemSettings.java
++++ b/packages/SettingsProvider/src/android/provider/settings/backup/SystemSettings.java
+@@ -130,9 +130,17 @@ public class SystemSettings {
+                 Settings.System.CV_ENABLED,
+                 Settings.System.CV_DYNAMIC_ENABLED,
+                 Settings.System.CV_PREFERRED_INTENSITY,
++                Settings.System.POP_UP_VIEW_QUICK_MENU_GESTURE_ENABLED,
++                Settings.System.POP_UP_VIEW_QUICK_MENU_SELECTED_APPS,
++                Settings.System.POP_UP_VIEW_QUICK_MENU_GESTURE_AREA_WIDTH_DP,
++                Settings.System.POP_UP_VIEW_QUICK_MENU_GESTURE_AREA_HEIGHT_DP,
++                Settings.System.POP_UP_NOTIFICATION_ENTRY_ENABLED,
++                Settings.System.POP_UP_NOTIFICATION_LAUNCH_MODE,
+                 Settings.System.POP_UP_NOTIFICATION_JUMP_PORTRAIT,
+                 Settings.System.POP_UP_NOTIFICATION_JUMP_LANDSCAPE,
+-                Settings.System.POP_UP_NOTIFICATION_BLACKLIST
++                Settings.System.POP_UP_NOTIFICATION_BLACKLIST,
++                Settings.System.POP_UP_VIEW_ALLOW_MULTIPLE,
++                Settings.System.POP_UP_VIEW_UI_MODE
+         ));
+         if (Flags.backUpSmoothDisplayAndForcePeakRefreshRate()) {
+             settings.add(Settings.System.PEAK_REFRESH_RATE);
+diff --git a/packages/SettingsProvider/src/android/provider/settings/validators/SystemSettingsValidators.java b/packages/SettingsProvider/src/android/provider/settings/validators/SystemSettingsValidators.java
+index c524ada20..b9914d7aa 100644
+--- a/packages/SettingsProvider/src/android/provider/settings/validators/SystemSettingsValidators.java
++++ b/packages/SettingsProvider/src/android/provider/settings/validators/SystemSettingsValidators.java
+@@ -162,8 +162,22 @@ public class SystemSettingsValidators {
+         VALIDATORS.put(System.AUTO_TIME, BOOLEAN_VALIDATOR);
+         VALIDATORS.put(System.AUTO_TIME_ZONE, BOOLEAN_VALIDATOR);
+         VALIDATORS.put(System.SHOW_GTALK_SERVICE_STATUS, BOOLEAN_VALIDATOR);
++        VALIDATORS.put(System.POP_UP_VIEW_QUICK_MENU_GESTURE_ENABLED, BOOLEAN_VALIDATOR);
++        VALIDATORS.put(System.POP_UP_VIEW_QUICK_MENU_SELECTED_APPS, ANY_STRING_VALIDATOR);
++        VALIDATORS.put(System.POP_UP_VIEW_QUICK_MENU_GESTURE_AREA_WIDTH_DP,
++                new InclusiveFloatRangeValidator(20f, 100f));
++        VALIDATORS.put(System.POP_UP_VIEW_QUICK_MENU_GESTURE_AREA_HEIGHT_DP,
++                new InclusiveFloatRangeValidator(20f, 100f));
++        VALIDATORS.put(System.POP_UP_NOTIFICATION_ENTRY_ENABLED, BOOLEAN_VALIDATOR);
++        VALIDATORS.put(System.POP_UP_NOTIFICATION_LAUNCH_MODE,
++                new DiscreteValueValidator(new String[] {
++                        "bubble", "popup_view", "free_window", "free window", null
++                }));
+         VALIDATORS.put(System.POP_UP_NOTIFICATION_JUMP_PORTRAIT, BOOLEAN_VALIDATOR);
+         VALIDATORS.put(System.POP_UP_NOTIFICATION_JUMP_LANDSCAPE, BOOLEAN_VALIDATOR);
++        VALIDATORS.put(System.POP_UP_NOTIFICATION_BLACKLIST, ANY_STRING_VALIDATOR);
++        VALIDATORS.put(System.POP_UP_VIEW_ALLOW_MULTIPLE, BOOLEAN_VALIDATOR);
++        VALIDATORS.put(System.POP_UP_VIEW_UI_MODE, new InclusiveIntegerRangeValidator(0, 1));
+         VALIDATORS.put(
+                 System.WALLPAPER_ACTIVITY,
+                 new Validator() {
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/notification/row/NotificationContentView.java b/packages/SystemUI/src/com/android/systemui/statusbar/notification/row/NotificationContentView.java
+index c1fb43891..626280354 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/notification/row/NotificationContentView.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/notification/row/NotificationContentView.java
+@@ -28,6 +28,7 @@ import android.graphics.Rect;
+ import android.graphics.drawable.Drawable;
+ import android.os.Build;
+ import android.os.RemoteException;
++import android.provider.Settings;
+ import android.service.notification.StatusBarNotification;
+ import android.util.ArrayMap;
+ import android.util.AttributeSet;
+@@ -1627,8 +1628,11 @@ public class NotificationContentView extends FrameLayout implements Notification
+             return;
+         }
+ 
+-        boolean isPropEnabled = android.os.SystemProperties.getBoolean(
+-                "persist.uwuaosp.notification.popup_entry_enabled", false);
++        boolean isPropEnabled = Settings.System.getIntForUser(
++                mContext.getContentResolver(),
++                Settings.System.POP_UP_NOTIFICATION_ENTRY_ENABLED,
++                0,
++                getSettingsUserId()) != 0;
+         boolean canBubble = shouldShowBubbleButton(entry);
+         boolean canShowPopupButton = isPropEnabled && shouldShowPopupButton(entry);
+ 
+@@ -1724,6 +1728,10 @@ public class NotificationContentView extends FrameLayout implements Notification
+         mContainingNotification.performClick();
+     }
+ 
++    private int getSettingsUserId() {
++        return mSbn != null ? mSbn.getNormalizedUserId() : mContext.getUserId();
++    }
++
+     private static void removeBottomMargin(ViewGroup actionListMarginTarget) {
+         ViewGroup.LayoutParams lp = actionListMarginTarget.getLayoutParams();
+         if (lp instanceof MarginLayoutParams) {
+diff --git a/services/core/java/com/android/server/policy/PhoneWindowManager.java b/services/core/java/com/android/server/policy/PhoneWindowManager.java
+index 1e213b7bd..eeeeb92d4 100644
+--- a/services/core/java/com/android/server/policy/PhoneWindowManager.java
++++ b/services/core/java/com/android/server/policy/PhoneWindowManager.java
+@@ -438,6 +438,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+     private static final float TRIGGER_MIN_DISTANCE_DP = 30.0f; 
+     private static final float TRIGGER_MAX_ANGLE_RAD = (float) Math.toRadians(80.0); 
+ 
++    private boolean mPopupViewQuickMenuGestureEnabled;
+     private boolean mIsTrackingSystemGesture = false; 
+     private boolean mIsTrackingSideGesture = false;
+     private boolean mGestureTriggered = false;
+@@ -1174,6 +1175,15 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+             resolver.registerContentObserver(Settings.System.getUriFor(
+                     Settings.System.ANBI_ENABLED), false, this,
+                     UserHandle.USER_ALL);
++            resolver.registerContentObserver(Settings.System.getUriFor(
++                    Settings.System.POP_UP_VIEW_QUICK_MENU_GESTURE_ENABLED), false, this,
++                    UserHandle.USER_ALL);
++            resolver.registerContentObserver(Settings.System.getUriFor(
++                    Settings.System.POP_UP_VIEW_QUICK_MENU_GESTURE_AREA_WIDTH_DP), false, this,
++                    UserHandle.USER_ALL);
++            resolver.registerContentObserver(Settings.System.getUriFor(
++                    Settings.System.POP_UP_VIEW_QUICK_MENU_GESTURE_AREA_HEIGHT_DP), false, this,
++                    UserHandle.USER_ALL);
+             updateSettings();
+         }
+ 
+@@ -3616,6 +3626,10 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+                     LineageSettings.System.VOLUME_ANSWER_CALL, 0, UserHandle.USER_CURRENT) == 1)
+                     && ((mDeviceHardwareWakeKeys & KEY_MASK_VOLUME) != 0);
+ 
++            mPopupViewQuickMenuGestureEnabled = Settings.System.getIntForUser(resolver,
++                    Settings.System.POP_UP_VIEW_QUICK_MENU_GESTURE_ENABLED,
++                    0, UserHandle.USER_CURRENT) == 1;
++
+             // Configure wake gesture.
+             boolean wakeGestureEnabledSetting = Settings.Secure.getIntForUser(resolver,
+                     Settings.Secure.WAKE_GESTURE_ENABLED, 0,
+@@ -3737,6 +3751,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+         if (updateKidsModeSettings) {
+             updateKidsModeSettings(kidsModeEnabled);
+         }
++        updateGestureParams();
+         if (updateRotation) {
+             updateRotation(true);
+         }
+@@ -6304,19 +6319,6 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+         }
+     };
+ 
+-    BroadcastReceiver mGestureSettingsReceiver = new BroadcastReceiver() {
+-        @Override
+-        public void onReceive(Context context, Intent intent) {
+-            if ("org.uwuaosp.freeformsettings.UPDATE_GESTURE_SETTINGS".equals(
+-                    intent.getAction())) {
+-                if (GESTURE_DEBUG) {
+-                    Slog.d(TAG_GESTURE, "Received gesture settings update broadcast");
+-                }
+-                updateGestureParams();
+-            }
+-        }
+-    };
+-
+     @Override
+     public void startedWakingUpGlobal(@WakeReason int reason) {
+ 
+@@ -7113,8 +7115,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+ 
+     @Override
+     public int interceptMotionBeforeQueueing(MotionEvent event) {
+-        boolean isPopupViewEnable = SystemProperties.getBoolean("persist.avium.popup_gesture", false);
+-        if(!isPopupViewEnable){
++        if (!mPopupViewQuickMenuGestureEnabled) {
+             return SYSTEM_GESTURE_NONE;
+         }
+         final int action = event.getActionMasked();
+@@ -7251,11 +7252,14 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+             mDisplayWidth = size.x;
+             mDisplayHeight = size.y;
+         }
++        final ContentResolver resolver = mContext.getContentResolver();
+         float density = mContext.getResources().getDisplayMetrics().density;
+-        GESTURE_AREA_HEIGHT_DP = Float.parseFloat(
+-        SystemProperties.get("persist.avium.gesture_area_height_dp", String.valueOf(GESTURE_AREA_HEIGHT_DP)));
+-        GESTURE_AREA_WIDTH_DP = Float.parseFloat(
+-            SystemProperties.get("persist.avium.gesture_area_width_dp", String.valueOf(GESTURE_AREA_WIDTH_DP)));
++        GESTURE_AREA_HEIGHT_DP = Settings.System.getFloatForUser(resolver,
++                Settings.System.POP_UP_VIEW_QUICK_MENU_GESTURE_AREA_HEIGHT_DP,
++                GESTURE_AREA_HEIGHT_DP, UserHandle.USER_CURRENT);
++        GESTURE_AREA_WIDTH_DP = Settings.System.getFloatForUser(resolver,
++                Settings.System.POP_UP_VIEW_QUICK_MENU_GESTURE_AREA_WIDTH_DP,
++                GESTURE_AREA_WIDTH_DP, UserHandle.USER_CURRENT);
+         mMinGestureDistancePx = TRIGGER_MIN_DISTANCE_DP * density;
+         mGestureAreaHeightPx  = GESTURE_AREA_HEIGHT_DP  * density;
+         mGestureAreaWidthPx   = GESTURE_AREA_WIDTH_DP   * density;
+@@ -7271,10 +7275,6 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+         mKeyguardDelegate.onSystemReady();
+         //Ext add
+         updateGestureParams();
+-        IntentFilter gestureSettingsFilter =
+-                new IntentFilter("org.uwuaosp.freeformsettings.UPDATE_GESTURE_SETTINGS");
+-        mContext.registerReceiver(mGestureSettingsReceiver, gestureSettingsFilter,
+-                Context.RECEIVER_NOT_EXPORTED);
+         mDisplayManager.registerDisplayListener(mDisplayListener, mHandler);
+ 
+         if (mContext.getResources().getBoolean(com.android.internal.R.bool.config_pocketModeSupported)) {
+diff --git a/services/core/java/com/android/server/wm/DimmerWindowManager.java b/services/core/java/com/android/server/wm/DimmerWindowManager.java
+index 8e1ab83e2..11db847f3 100644
+--- a/services/core/java/com/android/server/wm/DimmerWindowManager.java
++++ b/services/core/java/com/android/server/wm/DimmerWindowManager.java
+@@ -35,10 +35,8 @@ class DimmerWindowManager {
+         if (task == null) {
+             return;
+         }
+-        if (PopUpSettingsConfig.getInstance().isLegacyUiMode()
+-                && mActiveTask != null && mActiveTask != task) {
+-            PopUpWindowController.getInstance().moveActivityTaskToBack(
+-                    mActiveTask, PopUpWindowController.MOVE_TO_BACK_NEW_MINI);
++        if (!PopUpSettingsConfig.getInstance().isAllowMultipleEnabled()) {
++            moveOtherTasksToBack(task, PopUpWindowController.MOVE_TO_BACK_SINGLE_POP_UP_POLICY);
+         }
+         DimmerWindow window = getOrCreate(task);
+         window.show();
+@@ -143,6 +141,17 @@ class DimmerWindowManager {
+         return new ArrayList<>(mWindowOrder);
+     }
+ 
++    void moveOtherTasksToBack(Task keepTask, int reason) {
++        final ArrayList<Task> tasks = new ArrayList<>(mWindowOrder);
++        for (int i = tasks.size() - 1; i >= 0; i--) {
++            final Task task = tasks.get(i);
++            if (task == null || task == keepTask) {
++                continue;
++            }
++            PopUpWindowController.getInstance().moveActivityTaskToBack(task, reason);
++        }
++    }
++
+     private DimmerWindow getOrCreate(Task task) {
+         DimmerWindow window = mWindows.get(task);
+         if (window == null) {
+diff --git a/services/core/java/com/android/server/wm/PopUpWindowController.java b/services/core/java/com/android/server/wm/PopUpWindowController.java
+index 85e692a40..4659416eb 100644
+--- a/services/core/java/com/android/server/wm/PopUpWindowController.java
++++ b/services/core/java/com/android/server/wm/PopUpWindowController.java
+@@ -88,6 +88,7 @@ public class PopUpWindowController {
+     static final int MOVE_TO_BACK_NEW_MINI = 2;
+     static final int MOVE_TO_BACK_NEW_PIN = 3;
+     static final int MOVE_TO_BACK_NON_USER = 4;
++    static final int MOVE_TO_BACK_SINGLE_POP_UP_POLICY = 5;
+ 
+     private static final long EXIT_POP_UP_DELAY = 200L;
+ 
+@@ -392,6 +393,12 @@ public class PopUpWindowController {
+         }
+     }
+ 
++    void enforceSinglePopUpPolicy() {
++        final Task activeTask = DimmerWindowManager.getInstance().getActiveTask();
++        DimmerWindowManager.getInstance().moveOtherTasksToBack(
++                activeTask, MOVE_TO_BACK_SINGLE_POP_UP_POLICY);
++    }
++
+     private void moveActivityTaskToBackInner(Task task, Task fullTask) {
+         ActivityRecord fullTaskActivity = fullTask.getResumedActivity();
+         if (fullTaskActivity == null) {
+@@ -828,6 +835,8 @@ public class PopUpWindowController {
+                 return "NEW_PIN";
+             case MOVE_TO_BACK_NON_USER:
+                 return "NON_USER";
++            case MOVE_TO_BACK_SINGLE_POP_UP_POLICY:
++                return "SINGLE_POP_UP_POLICY";
+             default:
+                 return "UNKNOWN";
+         }
+-- 
+2.54.0
+

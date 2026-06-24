@@ -1,0 +1,849 @@
+From 6cd46fad298cb08eacc5d291d5da3a344e8289c8 Mon Sep 17 00:00:00 2001
+From: uwu-gl <moegluwu0@gmail.com>
+Date: Sat, 14 Mar 2026 21:21:24 +0800
+Subject: [PATCH 11/43] DimmerWindowManager: Add multi-window controls
+
+Add a dedicated DimmerWindowManager to coordinate multi-window controls on top of the pop-up dimmer surface. This separates control layout and state from the main dimmer window logic.
+---
+ .../android/server/wm/ActivityStarter.java    |   5 +
+ .../com/android/server/wm/DimmerWindow.java   | 172 ++++++++++++------
+ .../server/wm/DimmerWindowManager.java        | 154 ++++++++++++++++
+ .../server/wm/PopUpWindowController.java      |  95 +++++++---
+ .../com/android/server/wm/TaskFragment.java   |   5 +-
+ .../server/wm/TaskWindowSurfaceInfo.java      |  10 +-
+ .../server/wm/TopActivityRecorder.java        |  12 +-
+ 7 files changed, 358 insertions(+), 95 deletions(-)
+ create mode 100644 services/core/java/com/android/server/wm/DimmerWindowManager.java
+
+diff --git a/services/core/java/com/android/server/wm/ActivityStarter.java b/services/core/java/com/android/server/wm/ActivityStarter.java
+index 6ecd05830..ad98bdeaf 100644
+--- a/services/core/java/com/android/server/wm/ActivityStarter.java
++++ b/services/core/java/com/android/server/wm/ActivityStarter.java
+@@ -2327,6 +2327,11 @@ class ActivityStarter {
+         boolean blockBalInTask = (newTask
+                 || !targetTask.isUidPresent(mCallingUid)
+                 || (LAUNCH_SINGLE_INSTANCE == mLaunchMode && targetTask.inPinnedWindowingMode()));
++        final boolean isPopUpLaunch = mOptions != null
++                && WindowConfiguration.isPopUpWindowMode(mOptions.getLaunchWindowingMode());
++        if (isPopUpLaunch) {
++            blockBalInTask = false;
++        }
+ 
+         if (mBalVerdict.blocks() && blockBalInTask
+                 && handleBackgroundActivityAbort(r)) {
+diff --git a/services/core/java/com/android/server/wm/DimmerWindow.java b/services/core/java/com/android/server/wm/DimmerWindow.java
+index 6db502cd7..89c1a2e22 100644
+--- a/services/core/java/com/android/server/wm/DimmerWindow.java
++++ b/services/core/java/com/android/server/wm/DimmerWindow.java
+@@ -14,7 +14,7 @@ import static android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
+ import static android.view.View.SYSTEM_UI_FLAG_FULLSCREEN;
+ import static android.view.WindowManager.LayoutParams.TYPE_MINI_WINDOW_DIMMER;
+ 
+-import static com.android.server.wm.PopUpWindowController.MOVE_TO_BACK_TOUCH_OUTSIDE;
++import static com.android.server.wm.PopUpWindowController.MOVE_TO_BACK_FROM_LEAVE_BUTTON;
+ 
+ import static com.android.internal.util.android.DebugConstants.DEBUG_POP_UP;
+ 
+@@ -58,7 +58,7 @@ class DimmerWindow {
+ 
+     private Configuration mOldConfig;
+     private DimView mDimView;
+-    private Task mLastDimmerTask;
++    private final Task mTask;
+     private WindowManager mWindowManager;
+ 
+     private boolean mIsWindowAdded = false;
+@@ -67,16 +67,14 @@ class DimmerWindow {
+     private float mCurrentScale = 1.0f;
+ 
+     private int mVibrateThreadhold = 50;
++    private int mPendingShowAttempts = 0;
++    private boolean mPendingShow = false;
+ 
+-    private static class InstanceHolder {
+-        private static final DimmerWindow INSTANCE = new DimmerWindow();
+-    }
+-
+-    static DimmerWindow getInstance() {
+-        return InstanceHolder.INSTANCE;
+-    }
++    private static final int MAX_SHOW_RETRY = 40;
++    private static final long SHOW_RETRY_DELAY_MS = 50L;
+ 
+-    private DimmerWindow() {
++    DimmerWindow(Task task) {
++        mTask = task;
+     }
+ 
+     private class DimView extends FrameLayout {
+@@ -150,7 +148,7 @@ class DimmerWindow {
+                         @Override
+                         public boolean onDoubleTap(MotionEvent e) {
+                             if (!mHasMoved) {
+-                                PopUpWindowController.getInstance().exitMiniWindowingMode();
++                                PopUpWindowController.getInstance().exitMiniWindowingMode(mTask);
+                                 return true;
+                             }
+                             return false;
+@@ -216,6 +214,7 @@ class DimmerWindow {
+                     }
+                     switch (event.getAction()) {
+                         case MotionEvent.ACTION_DOWN:
++                            DimmerWindowManager.getInstance().setActiveTask(mTask);
+                             initX = (int) event.getRawX();
+                             initY = (int) event.getRawY();
+                             lastX = initX; // Initialize last touch position
+@@ -227,6 +226,7 @@ class DimmerWindow {
+                             return true;
+ 
+                         case MotionEvent.ACTION_MOVE:
++                            DimmerWindowManager.getInstance().hideMenus();
+                             int dx = (int) event.getRawX() - lastX;
+                             int dy = (int) event.getRawY() - lastY;
+ 
+@@ -293,9 +293,10 @@ class DimmerWindow {
+                 public boolean onTouch(View v, MotionEvent event) {
+                     switch (event.getAction()) {
+                         case MotionEvent.ACTION_DOWN:
++                            DimmerWindowManager.getInstance().setActiveTask(mTask);
+                             // Get current scale from task
+-                            if (mLastDimmerTask != null) {
+-                                TaskWindowSurfaceInfo info = mLastDimmerTask.mWindowContainerExt
++                            if (mTask != null) {
++                                TaskWindowSurfaceInfo info = mTask.mWindowContainerExt
+                                         .getTaskWindowSurfaceInfo();
+                                 if (info != null) {
+                                     initialScale = info.getWindowSurfaceScale();
+@@ -377,21 +378,21 @@ class DimmerWindow {
+         }
+ 
+         private void resizeTask(float scale, boolean isLeft, boolean isTop) {
+-            if (mLastDimmerTask == null) return;
+-            mLastDimmerTask.mWmService.mH.post(() -> {
+-                synchronized (mLastDimmerTask.mWmService.mGlobalLock) {
+-                    if (mLastDimmerTask == null) return;
+-                    TaskWindowSurfaceInfo info = mLastDimmerTask.mWindowContainerExt
++            if (mTask == null) return;
++            mTask.mWmService.mH.post(() -> {
++                synchronized (mTask.mWmService.mGlobalLock) {
++                    if (mTask == null) return;
++                    TaskWindowSurfaceInfo info = mTask.mWindowContainerExt
+                             .getTaskWindowSurfaceInfo();
+                     if (info != null) {
+                         Rect displayBounds = new Rect();
+-                        mLastDimmerTask.getDisplayContent().getBounds(displayBounds);
++                        mTask.getDisplayContent().getBounds(displayBounds);
+ 
+                         float oldScale = info.getWindowSurfaceScale();
+                         float scaleDiff = scale - oldScale;
+ 
+                         if (Math.abs(scaleDiff) > 0.001f) {
+-                            Rect bounds = mLastDimmerTask.getBounds();
++                            Rect bounds = mTask.getBounds();
+                             float dW = bounds.width() * scaleDiff;
+                             float dH = bounds.height() * scaleDiff;
+ 
+@@ -406,7 +407,7 @@ class DimmerWindow {
+                                 if (DEBUG_POP_UP) {
+                                     Slog.d(TAG, "Landscape display resize: scaling from center");
+                                 }
+-                            } else if (mLastDimmerTask.getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
++                            } else if (mTask.getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
+                                 // LANDSCAPE: Scale from center (no shift)
+                                 dx = 0;
+                                 dy = 0;
+@@ -441,8 +442,8 @@ class DimmerWindow {
+                         info.setWindowSurfaceScaleDrag(scale, displayBounds, isOrientationChanged);
+ 
+                         android.view.SurfaceControl.Transaction t =
+-                                mLastDimmerTask.getSyncTransaction();
+-                        PopUpWindowController.getInstance().onPrepareSurfaces(mLastDimmerTask, t);
++                                mTask.getSyncTransaction();
++                        PopUpWindowController.getInstance().onPrepareSurfaces(mTask, t);
+                         t.apply();
+                     }
+                 }
+@@ -450,19 +451,19 @@ class DimmerWindow {
+         }
+ 
+         private void moveTaskSurface(int centerX, int centerY) {
+-            if (mLastDimmerTask == null) return;
++            if (mTask == null) return;
+ 
+-            mLastDimmerTask.mWmService.mH.post(() -> {
+-                synchronized (mLastDimmerTask.mWmService.mGlobalLock) {
+-                    if (mLastDimmerTask == null) return;
+-                    TaskWindowSurfaceInfo info = mLastDimmerTask.mWindowContainerExt
++            mTask.mWmService.mH.post(() -> {
++                synchronized (mTask.mWmService.mGlobalLock) {
++                    if (mTask == null) return;
++                    TaskWindowSurfaceInfo info = mTask.mWindowContainerExt
+                             .getTaskWindowSurfaceInfo();
+                     if (info != null) {
+                         info.setWindowCenterPosition(new Point(centerX, centerY));
+ 
+                         android.view.SurfaceControl.Transaction t =
+-                                mLastDimmerTask.getSyncTransaction();
+-                        PopUpWindowController.getInstance().onPrepareSurfaces(mLastDimmerTask, t);
++                                mTask.getSyncTransaction();
++                        PopUpWindowController.getInstance().onPrepareSurfaces(mTask, t);
+                         t.apply();
+                     }
+                 }
+@@ -576,8 +577,8 @@ class DimmerWindow {
+             lpTouch.width = touchWidth;
+             mTopBarTouchArea.setLayoutParams(lpTouch);
+ 
+-            if (mLastDimmerTask != null) {
+-                TaskWindowSurfaceInfo info = mLastDimmerTask.mWindowContainerExt
++            if (mTask != null) {
++                TaskWindowSurfaceInfo info = mTask.mWindowContainerExt
+                         .getTaskWindowSurfaceInfo();
+                 if (info != null) {
+                     updateLayout(info.getTaskWindowSurfaceBounds());
+@@ -612,9 +613,9 @@ class DimmerWindow {
+ 
+         private void onOrientationChanged() {
+             // Force layout update with current task bounds
+-            if (mLastDimmerTask != null) {
++            if (mTask != null) {
+                 post(() -> {
+-                    TaskWindowSurfaceInfo info = mLastDimmerTask.mWindowContainerExt
++                    TaskWindowSurfaceInfo info = mTask.mWindowContainerExt
+                             .getTaskWindowSurfaceInfo();
+                     if (info != null) {
+                         if (DEBUG_POP_UP) {
+@@ -640,19 +641,35 @@ class DimmerWindow {
+     }
+ 
+     Task getTask() {
+-        return mLastDimmerTask;
++        return mTask;
+     }
+ 
+-    void setTask(Task task) {
+-        if (DEBUG_POP_UP) {
+-            Slog.d(TAG, "setTask: " + (task != null ? task : "null"));
++    void show() {
++        if (!ensureBoundsReady()) {
++            scheduleShowRetry();
++            return;
+         }
+-        mLastDimmerTask = task;
+-        if (task != null && task.mWindowContainerExt.getTaskWindowSurfaceInfo() != null) {
+-             mCurrentScale = task.mWindowContainerExt.getTaskWindowSurfaceInfo()
+-                     .getWindowSurfaceScale();
++        mPendingShowAttempts = 0;
++        if (mTask != null && mTask.mWindowContainerExt.getTaskWindowSurfaceInfo() != null) {
++            mCurrentScale = mTask.mWindowContainerExt.getTaskWindowSurfaceInfo()
++                    .getWindowSurfaceScale();
+         }
+-        updateWindowState(task != null);
++        updateWindowState(true);
++    }
++
++    void hide() {
++        updateWindowState(false);
++    }
++
++    void destroy() {
++        mUiHandler.post(() -> {
++            if (mIsWindowAdded && mDimView != null && getWindowManager() != null) {
++                getWindowManager().removeView(mDimView);
++            }
++            mIsWindowAdded = false;
++            mShowing = false;
++            mDimView = null;
++        });
+     }
+ 
+     RectF getEdgeBarBounds() {
+@@ -660,18 +677,22 @@ class DimmerWindow {
+     }
+ 
+     void moveActivityTaskToBack() {
+-        if (mLastDimmerTask == null) {
++        if (mTask == null) {
+             return;
+         }
+         PopUpWindowController.getInstance().moveActivityTaskToBack(
+-                mLastDimmerTask, MOVE_TO_BACK_TOUCH_OUTSIDE);
++                mTask, MOVE_TO_BACK_FROM_LEAVE_BUTTON);
+     }
+ 
+     private void updateWindowState(boolean show) {
+         mUiHandler.post(() -> {
+-            if (show && mLastDimmerTask != null) {
++            if (show && mTask != null) {
++                if (!ensureBoundsReady()) {
++                    scheduleShowRetry();
++                    return;
++                }
+                 try {
+-                    TaskWindowSurfaceInfo info = mLastDimmerTask.mWindowContainerExt
++                    TaskWindowSurfaceInfo info = mTask.mWindowContainerExt
+                             .getTaskWindowSurfaceInfo();
+                     if (info != null && mDimView != null) {
+                         mDimView.updateLayout(info.getTaskWindowSurfaceBounds());
+@@ -689,6 +710,30 @@ class DimmerWindow {
+         });
+     }
+ 
++    private boolean ensureBoundsReady() {
++        if (mTask == null) {
++            return false;
++        }
++        TaskWindowSurfaceInfo info = mTask.mWindowContainerExt.getTaskWindowSurfaceInfo();
++        if (info == null) {
++            return false;
++        }
++        Rect bounds = info.getTaskWindowSurfaceBounds();
++        return bounds != null && !bounds.isEmpty();
++    }
++
++    private void scheduleShowRetry() {
++        if (mPendingShow || mPendingShowAttempts >= MAX_SHOW_RETRY) {
++            return;
++        }
++        mPendingShow = true;
++        mUiHandler.postDelayed(() -> {
++            mPendingShow = false;
++            mPendingShowAttempts++;
++            show();
++        }, SHOW_RETRY_DELAY_MS);
++    }
++
+     void onDensityChanged() {
+         PopUpWindowController.getInstance().findAndExitAllPopUp();
+     }
+@@ -705,9 +750,9 @@ class DimmerWindow {
+     }
+ 
+     void onResizeChanged() {
+-        if (mDimView != null && mLastDimmerTask != null) {
++        if (mDimView != null && mTask != null) {
+              try {
+-                 TaskWindowSurfaceInfo info = mLastDimmerTask.mWindowContainerExt
++                 TaskWindowSurfaceInfo info = mTask.mWindowContainerExt
+                          .getTaskWindowSurfaceInfo();
+                  if (info != null) {
+                      mDimView.updateLayout(info.getTaskWindowSurfaceBounds());
+@@ -734,7 +779,11 @@ class DimmerWindow {
+             mWindowParams.gravity = Gravity.LEFT | Gravity.TOP;
+             mWindowParams.x = 0;
+             mWindowParams.y = 0;
+-            mWindowParams.setTitle(WIN_TITLE);
++            if (mTask != null) {
++                mWindowParams.setTitle(WIN_TITLE + "#" + mTask.mTaskId);
++            } else {
++                mWindowParams.setTitle(WIN_TITLE);
++            }
+             mWindowParams.width = LayoutParams.MATCH_PARENT;
+             mWindowParams.height = LayoutParams.MATCH_PARENT;
+             mWindowParams.windowAnimations = 0;
+@@ -743,9 +792,9 @@ class DimmerWindow {
+                     mUiContext.createWindowContext(TYPE_MINI_WINDOW_DIMMER, null), mCurrentScale);
+             mDimView.setAlpha(1.0f);
+ 
+-            if (mLastDimmerTask != null) {
++            if (mTask != null) {
+                  try {
+-                     TaskWindowSurfaceInfo info = mLastDimmerTask.mWindowContainerExt
++                     TaskWindowSurfaceInfo info = mTask.mWindowContainerExt
+                              .getTaskWindowSurfaceInfo();
+                      if (info != null) {
+                          mDimView.updateLayout(info.getTaskWindowSurfaceBounds());
+@@ -763,9 +812,9 @@ class DimmerWindow {
+     private void updateDimmerWin(boolean show) {
+         if (getWindowManager() != null && mDimView != null && mShowing != show) {
+             if (show) {
+-                if (mLastDimmerTask != null) {
++                if (mTask != null) {
+                      try {
+-                         TaskWindowSurfaceInfo info = mLastDimmerTask.mWindowContainerExt
++                         TaskWindowSurfaceInfo info = mTask.mWindowContainerExt
+                                  .getTaskWindowSurfaceInfo();
+                          if (info != null) {
+                              mDimView.updateLayout(info.getTaskWindowSurfaceBounds());
+@@ -868,11 +917,16 @@ class DimmerWindow {
+         return decoratedBounds;
+     }
+ 
+-    public void notifyFocusChanged() {
+-        if (mDimView != null) {
+-            boolean hasFocus = PopUpWindowController.getInstance().shouldMiniWindowHandleInput();
+-            mDimView.updateTopBarFocus(hasFocus);
+-        }
++    void updateTopBarFocus(boolean hasFocus) {
++        mUiHandler.post(() -> {
++            if (mDimView != null) {
++                mDimView.updateTopBarFocus(hasFocus);
++            }
++        });
++    }
++
++    void hideMenu() {
++        // no-op: current Pop-Up View decoration no longer exposes a menu overlay.
+     }
+ 
+     private int dpToPx(int dp) {
+diff --git a/services/core/java/com/android/server/wm/DimmerWindowManager.java b/services/core/java/com/android/server/wm/DimmerWindowManager.java
+new file mode 100644
+index 000000000..70adb8b01
+--- /dev/null
++++ b/services/core/java/com/android/server/wm/DimmerWindowManager.java
+@@ -0,0 +1,154 @@
++/*
++ * Copyright (C) 2026 The uwuAOSP Project
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++package com.android.server.wm;
++
++import android.graphics.Rect;
++import android.util.ArrayMap;
++
++import java.util.ArrayList;
++
++/**
++ * Manages Pop-Up View decoration windows per task.
++ */
++class DimmerWindowManager {
++
++    private static final class InstanceHolder {
++        private static final DimmerWindowManager INSTANCE = new DimmerWindowManager();
++    }
++
++    static DimmerWindowManager getInstance() {
++        return InstanceHolder.INSTANCE;
++    }
++
++    private final ArrayMap<Task, DimmerWindow> mWindows = new ArrayMap<>();
++    private final ArrayList<Task> mWindowOrder = new ArrayList<>();
++
++    private Task mActiveTask;
++
++    private DimmerWindowManager() {
++    }
++
++    void attachTask(Task task) {
++        if (task == null) {
++            return;
++        }
++        DimmerWindow window = getOrCreate(task);
++        window.show();
++        setActiveTask(task);
++    }
++
++    void detachTask(Task task) {
++        if (task == null) {
++            return;
++        }
++        DimmerWindow window = mWindows.remove(task);
++        if (window != null) {
++            window.destroy();
++        }
++        mWindowOrder.remove(task);
++        if (task == mActiveTask) {
++            mActiveTask = mWindowOrder.isEmpty() ? null : mWindowOrder.get(mWindowOrder.size() - 1);
++        }
++        updateFocusState();
++    }
++
++    void clearAll() {
++        for (int i = mWindows.size() - 1; i >= 0; i--) {
++            mWindows.valueAt(i).destroy();
++        }
++        mWindows.clear();
++        mWindowOrder.clear();
++        mActiveTask = null;
++    }
++
++    void setActiveTask(Task task) {
++        if (task == null) {
++            mActiveTask = null;
++            updateFocusState();
++            return;
++        }
++        DimmerWindow window = getOrCreate(task);
++        window.show();
++        mWindowOrder.remove(task);
++        mWindowOrder.add(task);
++        if (mActiveTask != task) {
++            mActiveTask = task;
++            updateFocusState();
++        }
++    }
++
++    Task getActiveTask() {
++        return mActiveTask;
++    }
++
++    Rect getActiveBounds() {
++        DimmerWindow window = mActiveTask != null ? mWindows.get(mActiveTask) : null;
++        return window != null ? window.getBounds() : null;
++    }
++
++    Task findTaskAt(int x, int y) {
++        for (int i = mWindowOrder.size() - 1; i >= 0; i--) {
++            Task task = mWindowOrder.get(i);
++            DimmerWindow window = mWindows.get(task);
++            if (window == null) {
++                continue;
++            }
++            Rect bounds = window.getBounds();
++            if (bounds != null && bounds.contains(x, y)) {
++                return task;
++            }
++        }
++        return null;
++    }
++
++    void onDragResizeChanged(Task task, float scale, Rect taskWindowSurfaceBound,
++            boolean isLandscape) {
++        DimmerWindow window = mWindows.get(task);
++        if (window != null) {
++            window.onDragResizeChanged(scale, taskWindowSurfaceBound, isLandscape);
++        }
++    }
++
++    void onResizeChanged(Task task) {
++        DimmerWindow window = mWindows.get(task);
++        if (window != null) {
++            window.onResizeChanged();
++        }
++    }
++
++    void notifyFocusChanged() {
++        updateFocusState();
++    }
++
++    void hideMenus() {
++        for (int i = mWindows.size() - 1; i >= 0; i--) {
++            mWindows.valueAt(i).hideMenu();
++        }
++    }
++
++    ArrayList<Task> getTasksSnapshot() {
++        return new ArrayList<>(mWindowOrder);
++    }
++
++    private DimmerWindow getOrCreate(Task task) {
++        DimmerWindow window = mWindows.get(task);
++        if (window == null) {
++            window = new DimmerWindow(task);
++            mWindows.put(task, window);
++            mWindowOrder.add(task);
++        }
++        return window;
++    }
++
++    private void updateFocusState() {
++        final boolean hasFocus = PopUpWindowController.getInstance().shouldMiniWindowHandleInput();
++        for (int i = mWindows.size() - 1; i >= 0; i--) {
++            Task task = mWindows.keyAt(i);
++            DimmerWindow window = mWindows.valueAt(i);
++            window.updateTopBarFocus(hasFocus && task == mActiveTask);
++        }
++    }
++}
+diff --git a/services/core/java/com/android/server/wm/PopUpWindowController.java b/services/core/java/com/android/server/wm/PopUpWindowController.java
+index 0e0f3a7b2..293b399b7 100644
+--- a/services/core/java/com/android/server/wm/PopUpWindowController.java
++++ b/services/core/java/com/android/server/wm/PopUpWindowController.java
+@@ -174,16 +174,44 @@ public class PopUpWindowController {
+             t.show(token.mSurfaceControl);
+             final DisplayContent displayContent = token.getDisplayContent();
+             if (displayContent != null) {
+-                final Task targetTask = DimmerWindow.getInstance().getTask();
++                final Task targetTask = getTaskForDimmerToken(token);
+                 if (targetTask != null && targetTask.mSurfaceControl != null) {
+-                    mTransaction.setLayer(token.mSurfaceControl, 1);
+-                    mTransaction.apply();
++                    token.assignRelativeLayer(t, targetTask.mSurfaceControl, 1, true);
++                } else {
++                    // Fallback to default layer if task lookup fails.
++                    t.setLayer(token.mSurfaceControl, layer);
+                 }
+             }
+         }
+         return true;
+     }
+ 
++    private Task getTaskForDimmerToken(WindowToken token) {
++        if (token == null) {
++            return null;
++        }
++        final WindowState win = token.getTopChild();
++        if (win == null || win.mAttrs == null) {
++            return null;
++        }
++        final CharSequence titleSeq = win.mAttrs.getTitle();
++        if (titleSeq == null) {
++            return null;
++        }
++        final String title = titleSeq.toString();
++        final String prefix = DimmerWindow.WIN_TITLE + "#";
++        if (!title.startsWith(prefix)) {
++            return null;
++        }
++        final String idPart = title.substring(prefix.length());
++        try {
++            final int taskId = Integer.parseInt(idPart);
++            return mAtmService.mRootWindowContainer.anyTaskForId(taskId);
++        } catch (NumberFormatException e) {
++            return null;
++        }
++    }
++
+ 
+     void onRotationChanged(Task task) {
+         if (task.mWindowContainerExt.getTaskWindowSurfaceInfo() != null) {
+@@ -332,9 +360,9 @@ public class PopUpWindowController {
+     }
+ 
+     void findAndExitAllPopUp() {
+-        final Task miniWinTask = DimmerWindow.getInstance().getTask();
+-        if (miniWinTask != null) {
+-            moveActivityTaskToBack(miniWinTask, MOVE_TO_BACK_TOUCH_OUTSIDE);
++        final ArrayList<Task> miniTasks = DimmerWindowManager.getInstance().getTasksSnapshot();
++        for (int i = miniTasks.size() - 1; i >= 0; i--) {
++            moveActivityTaskToBack(miniTasks.get(i), MOVE_TO_BACK_TOUCH_OUTSIDE);
+         }
+     }
+ 
+@@ -399,6 +427,20 @@ public class PopUpWindowController {
+         if (!WindowConfiguration.isPopUpWindowMode(windowingMode)) {
+             return false;
+         }
++        if (candidateTask == null || displayContent == null) {
++            return false;
++        }
++
++        final TaskDisplayArea tda = displayContent.getDefaultTaskDisplayArea();
++        if (tda == null) {
++            return false;
++        }
++
++        final Task newRoot = tda.createRootTask(
++                windowingMode, candidateTask.getActivityType(), true /* onTop */);
++        if (candidateTask.getParent() != newRoot) {
++            candidateTask.reparent(newRoot, WindowContainer.POSITION_TOP);
++        }
+         setWindowingModePopUpView(candidateTask, windowingMode);
+         return true;
+     }
+@@ -770,7 +812,7 @@ public class PopUpWindowController {
+     * @return true if mini window has focus, false otherwise
+     */
+     boolean isMiniWindowFocused() {
+-        final Task miniTask = DimmerWindow.getInstance().getTask();
++        final Task miniTask = DimmerWindowManager.getInstance().getActiveTask();
+         if (miniTask == null || !miniTask.getWindowConfiguration().isMiniExtWindowMode()) {
+             return false;
+         }
+@@ -809,7 +851,7 @@ public class PopUpWindowController {
+     * Get the mini window task, or null if none exists.
+     */
+     Task getMiniWindowTask() {
+-        return DimmerWindow.getInstance().getTask();
++        return DimmerWindowManager.getInstance().getActiveTask();
+     }
+ 
+     /**
+@@ -827,15 +869,19 @@ public class PopUpWindowController {
+      * Exits Pop-Up mode, effectively restoring the task to Fullscreen.
+      */
+     public void exitMiniWindowingMode() {
+-        final Task task = DimmerWindow.getInstance().getTask();
+-        if (task != null) {
+-            // Flag to indicate we are exiting manually, possibly affecting transition logic
+-            setTryExitWindowingMode(true);
+-            // tryExitPopUpView(Task, skipAnim, removeMini, removePin)
+-            // removeMini=true ensures it clears from TopActivityRecorder tracking
+-            tryExitPopUpView(task, false, true, true);
+-            setTryExitWindowingMode(false);
++        exitMiniWindowingMode(DimmerWindowManager.getInstance().getActiveTask());
++    }
++
++    public void exitMiniWindowingMode(Task task) {
++        if (task == null) {
++            return;
+         }
++        // Flag to indicate we are exiting manually, possibly affecting transition logic
++        setTryExitWindowingMode(true);
++        // tryExitPopUpView(Task, skipAnim, removeMini, removePin)
++        // removeMini=true ensures it clears from TopActivityRecorder tracking
++        tryExitPopUpView(task, false, true, true);
++        setTryExitWindowingMode(false);
+     }
+ 
+     /**
+@@ -849,7 +895,7 @@ public class PopUpWindowController {
+     * This is different from Android's window focus - we track this based on user taps.
+     */
+     boolean shouldMiniWindowHandleInput() {
+-        final Task miniTask = DimmerWindow.getInstance().getTask();
++        final Task miniTask = DimmerWindowManager.getInstance().getActiveTask();
+         if (miniTask == null || !miniTask.getWindowConfiguration().isMiniExtWindowMode()) {
+             return false;
+         }
+@@ -865,7 +911,7 @@ public class PopUpWindowController {
+             Slog.e(TAG, "Mini window input focus changed: " + hasFocus);
+ 
+             // Notify DimmerWindow to update visuals
+-            DimmerWindow.getInstance().notifyFocusChanged();
++            DimmerWindowManager.getInstance().notifyFocusChanged();
+         }
+     }
+ 
+@@ -875,7 +921,7 @@ public class PopUpWindowController {
+                 return;
+             }
+ 
+-            final Task miniTask = DimmerWindow.getInstance().getTask();
++            final Task miniTask = DimmerWindowManager.getInstance().getActiveTask();
+             if (miniTask == null || !miniTask.getWindowConfiguration().isMiniExtWindowMode()) {
+                 return;
+             }
+@@ -918,16 +964,17 @@ public class PopUpWindowController {
+                 return;
+             }
+ 
+-            // NEW: Get DimmerWindow full bounds (including border/decoration)
+-            final Rect dimmerBounds = DimmerWindow.getInstance().getBounds();
+-            final boolean inMiniWindow = dimmerBounds != null && dimmerBounds.contains(x, y);
++            final Task touchedTask = DimmerWindowManager.getInstance().findTaskAt(x, y);
++            final boolean inMiniWindow = touchedTask != null;
+ 
+             if (DEBUG_POP_UP) {
+-                Slog.d(TAG, "Touch at (" + x + "," + y + "), dimmerBounds=" + dimmerBounds +
+-                    ", inMiniWindow=" + inMiniWindow);
++                Slog.d(TAG, "Touch at (" + x + "," + y + "), inMiniWindow=" + inMiniWindow);
+             }
+ 
++            DimmerWindowManager.getInstance().hideMenus();
++
+             if (inMiniWindow) {
++                DimmerWindowManager.getInstance().setActiveTask(touchedTask);
+                 setMiniWindowInputFocus(true);
+             } else {
+                 setMiniWindowInputFocus(false);
+diff --git a/services/core/java/com/android/server/wm/TaskFragment.java b/services/core/java/com/android/server/wm/TaskFragment.java
+index 39d1e9a3c..c1a92317c 100644
+--- a/services/core/java/com/android/server/wm/TaskFragment.java
++++ b/services/core/java/com/android/server/wm/TaskFragment.java
+@@ -1448,12 +1448,11 @@ class TaskFragment extends WindowContainer<WindowContainer> {
+                 affectsSiblingVisibility &= other.hasFillingContent();
+             }
+ 
+-            // Popup windows should NOT hide tasks below UNLESS it's the same popup mode
++            // Pop-Up View should NOT hide tasks below (allow multiple pop-up windows to be visible)
+             final int otherWindowingMode = other.getWindowingMode();
+             final int thisWindowingMode = getWindowingMode();
+             if (WindowConfiguration.isPopUpWindowMode(otherWindowingMode)) {
+-                // Only hide tasks of the SAME popup mode
+-                affectsSiblingVisibility = (thisWindowingMode == otherWindowingMode);
++                affectsSiblingVisibility = false;
+             }
+ 
+             if (affectsSiblingVisibility) {
+diff --git a/services/core/java/com/android/server/wm/TaskWindowSurfaceInfo.java b/services/core/java/com/android/server/wm/TaskWindowSurfaceInfo.java
+index b2df96671..7f7946dc9 100644
+--- a/services/core/java/com/android/server/wm/TaskWindowSurfaceInfo.java
++++ b/services/core/java/com/android/server/wm/TaskWindowSurfaceInfo.java
+@@ -127,7 +127,7 @@ class TaskWindowSurfaceInfo {
+     void setWindowSurfaceScaleDrag(float scale, Rect displayBound, boolean isLandscape) {
+         if (mWindowSurfaceScale != scale) {
+             mWindowSurfaceScale = scale;
+-            DimmerWindow.getInstance().onDragResizeChanged(scale,
++            DimmerWindowManager.getInstance().onDragResizeChanged(mTask, scale,
+                     getTaskWindowSurfaceBoundsOnDrag(displayBound), isLandscape);
+         }
+     }
+@@ -135,7 +135,7 @@ class TaskWindowSurfaceInfo {
+     void setWindowSurfaceScale(float scale) {
+         if (mWindowSurfaceScale != scale) {
+             mWindowSurfaceScale = scale;
+-            DimmerWindow.getInstance().onResizeChanged();
++            DimmerWindowManager.getInstance().onResizeChanged(mTask);
+         }
+     }
+ 
+@@ -259,8 +259,10 @@ class TaskWindowSurfaceInfo {
+             }
+             mCornerRadius = mMiniWindowCornerRadius;
+             if (!isPrevMiniWindow) {
+-                DimmerWindow.getInstance().setTask(mTask);
++                DimmerWindowManager.getInstance().attachTask(mTask);
+             }
++        } else if (isPrevMiniWindow) {
++            DimmerWindowManager.getInstance().detachTask(mTask);
+         }
+         if (isPopUpWindow || isPrevPopUpWindow) {
+             final SurfaceControl surfaceControl = mTask.getSurfaceControl();
+@@ -319,7 +321,7 @@ class TaskWindowSurfaceInfo {
+                 setWindowSurfaceScale(WindowResizingAlgorithm.getDefaultMiniWindowScale(
+                         mTask.getConfiguration().orientation, mTask.mDisplayContent.getRotation()));
+             }
+-            DimmerWindow.getInstance().onResizeChanged();
++            DimmerWindowManager.getInstance().onResizeChanged(mTask);
+         }
+         if ((mConfiguration.diff(newConfig) & ActivityInfo.CONFIG_DENSITY) != 0) {
+             updateDensityIfNeed(false);
+diff --git a/services/core/java/com/android/server/wm/TopActivityRecorder.java b/services/core/java/com/android/server/wm/TopActivityRecorder.java
+index 4ed7a6b7e..c9fcd4966 100644
+--- a/services/core/java/com/android/server/wm/TopActivityRecorder.java
++++ b/services/core/java/com/android/server/wm/TopActivityRecorder.java
+@@ -83,7 +83,7 @@ public class TopActivityRecorder {
+                     mTopMiniWindowActivity.add(new ActivityInfo(newFocus, newTask));
+                 }
+                 logD("Top mini-window activity changed to " + newFocus + ", addedTaskBefore=" + hasTask);
+-                DimmerWindow.getInstance().setTask(newTask);
++                DimmerWindowManager.getInstance().setActiveTask(newTask);
+             } else if (windowingMode == WindowConfiguration.WINDOWING_MODE_UNDEFINED
+                     || windowingMode == WindowConfiguration.WINDOWING_MODE_FULLSCREEN) {
+                 final ComponentName oldComponent = getTopFullscreenComponentLocked();
+@@ -197,9 +197,9 @@ public class TopActivityRecorder {
+                     final ActivityInfo ai = mTopMiniWindowActivity.remove(i);
+                     logD("removeMiniWindowTask: " + ai);
+                     if (n == 1) {
+-                        DimmerWindow.getInstance().setTask(null);
++                        DimmerWindowManager.getInstance().detachTask(task);
+                     } else {
+-                        DimmerWindow.getInstance().setTask(mTopMiniWindowActivity.get(n - 2).task);
++                        DimmerWindowManager.getInstance().detachTask(task);
+                     }
+                     return;
+                 }
+@@ -218,7 +218,7 @@ public class TopActivityRecorder {
+                 logD("Top fullscreen window activity changed to " + mTopFullscreenActivity);
+             }
+             mTopMiniWindowActivity.clear();
+-            DimmerWindow.getInstance().setTask(null);
++            DimmerWindowManager.getInstance().clearAll();
+         }
+     }
+ 
+@@ -226,7 +226,7 @@ public class TopActivityRecorder {
+         synchronized (mFocusLock) {
+             logD("clearMiniWindow");
+             mTopMiniWindowActivity.clear();
+-            DimmerWindow.getInstance().setTask(null);
++            DimmerWindowManager.getInstance().clearAll();
+         }
+     }
+ 
+@@ -234,7 +234,9 @@ public class TopActivityRecorder {
+         synchronized (mFocusLock) {
+             for (int i = mTopMiniWindowActivity.size() - 1; i >= 0; --i) {
+                 if (packageName.equals(mTopMiniWindowActivity.get(i).packageName)) {
++                    Task task = mTopMiniWindowActivity.get(i).task;
+                     mTopMiniWindowActivity.remove(i);
++                    DimmerWindowManager.getInstance().detachTask(task);
+                 }
+             }
+         }
+-- 
+2.54.0
+
