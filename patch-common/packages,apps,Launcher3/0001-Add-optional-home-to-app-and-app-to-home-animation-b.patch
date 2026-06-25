@@ -1,8 +1,8 @@
-From 40954bda92156e422e9c028d80d34a3b98f1e185 Mon Sep 17 00:00:00 2001
+From 3d4ad39b0015d44fc1d9a4dbf38575ad85ef80a8 Mon Sep 17 00:00:00 2001
 From: Hecheng Yu <kde-yyds@qq.com>
 Date: Thu, 16 Apr 2026 20:40:37 +0800
-Subject: [PATCH 1/2] Add optional home to app and app to home animation
- background blur
+Subject: [PATCH] Add optional home to app and app to home animation background
+ blur
 
 ---
  .../launcher3/QuickstepTransitionManager.java | 84 ++++++++++++++++++-
@@ -15,7 +15,7 @@ Subject: [PATCH 1/2] Add optional home to app and app to home animation
  create mode 100644 res/values/custom_strings.xml
 
 diff --git a/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java b/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java
-index bf6cba8..ed7da6f 100644
+index 5edd08e..25e2c9d 100644
 --- a/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java
 +++ b/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java
 @@ -87,6 +87,7 @@ import android.graphics.Point;
@@ -35,7 +35,7 @@ index bf6cba8..ed7da6f 100644
      private final StartingWindowListener mStartingWindowListener =
              new StartingWindowListener(this);
  
-@@ -1079,11 +1082,13 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
+@@ -1075,11 +1078,13 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
          appAnimator.addUpdateListener(listener);
          // Since we added a start delay, call update here to init the FloatingIconView properly.
          listener.onUpdate(0, true /* initOnly */);
@@ -50,7 +50,7 @@ index bf6cba8..ed7da6f 100644
          } else {
              animatorSet.playTogether(appAnimator, getBackgroundAnimator());
          }
-@@ -1222,11 +1227,13 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
+@@ -1218,11 +1223,13 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
                  surfaceApplier.scheduleApply(transaction);
              }
          });
@@ -65,7 +65,7 @@ index bf6cba8..ed7da6f 100644
          } else {
              animatorSet.playTogether(appAnimator, getBackgroundAnimator());
          }
-@@ -1282,6 +1289,79 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
+@@ -1278,6 +1285,79 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
          return backgroundRadiusAnim;
      }
  
@@ -196,10 +196,10 @@ index b62fb82..7ab8e75 100644
          android:key="pref_restart"
          android:title="@string/pref_restart_title"
 diff --git a/src/com/android/launcher3/LauncherPrefs.kt b/src/com/android/launcher3/LauncherPrefs.kt
-index 26e11d2..18e06fa 100644
+index 06c9ee6..62d20c4 100644
 --- a/src/com/android/launcher3/LauncherPrefs.kt
 +++ b/src/com/android/launcher3/LauncherPrefs.kt
-@@ -321,6 +321,7 @@ constructor(@ApplicationContext private val encryptedContext: Context) {
+@@ -319,6 +319,7 @@ constructor(@ApplicationContext private val encryptedContext: Context) {
          @JvmField val WALLPAPER_CAROUSEL_LOCKSCREEN = backedUpItem("pref_wallpaper_carousel_lockscreen", true)
          @JvmField val WALLPAPER_SCROLLING = backedUpItem("pref_allow_wallpaper_scrolling", true)
          @JvmField val WORK_EDU_STEP = backedUpItem("showed_work_profile_edu", 0)
@@ -208,10 +208,10 @@ index 26e11d2..18e06fa 100644
          val WORKSPACE_SIZE =
              backedUpItem(DeviceGridState.KEY_WORKSPACE_SIZE, "", EncryptionType.ENCRYPTED)
 diff --git a/src/com/android/launcher3/Utilities.java b/src/com/android/launcher3/Utilities.java
-index 84e369e..fb73382 100644
+index 467bc7e..55b3d0c 100644
 --- a/src/com/android/launcher3/Utilities.java
 +++ b/src/com/android/launcher3/Utilities.java
-@@ -1210,4 +1210,8 @@ public final class Utilities {
+@@ -1215,4 +1215,8 @@ public final class Utilities {
          final KeyguardManager keyguardManager = context.getSystemService(KeyguardManager.class);
          return keyguardManager != null && keyguardManager.isKeyguardSecure();
      }
