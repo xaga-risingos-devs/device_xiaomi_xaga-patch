@@ -1,7 +1,7 @@
-From c17a6b49c4b7246a47e9c2036e61fd0bd1246557 Mon Sep 17 00:00:00 2001
+From fc825e6102056ef21e4d274306a144ef82fd703b Mon Sep 17 00:00:00 2001
 From: minaripenguin <minaripenguin@users.noreply.github.com>
 Date: Thu, 14 Mar 2024 19:07:49 +0800
-Subject: [PATCH 03/43] EdgeEffect: Implement intensity-based edge scroll fling
+Subject: [PATCH 3/5] EdgeEffect: Implement intensity-based edge scroll fling
  haptics
 
 squashed:
