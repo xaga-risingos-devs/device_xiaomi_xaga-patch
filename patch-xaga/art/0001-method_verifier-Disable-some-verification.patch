@@ -1,0 +1,84 @@
+From d25143b7ac6b42aa138dfbc735f354d7558400ce Mon Sep 17 00:00:00 2001
+From: Hecheng Yu <kde-yyds@qq.com>
+Date: Tue, 7 Jul 2026 20:35:43 +0800
+Subject: [PATCH] method_verifier: Disable some verification
+
+* Work around MTK mediatek-telephony-common dex2oat failure
+  MTK's IMS stack contains a lot of dead code, with many codes that can't work on modern Android versions at all.
+  Even mediatek-telephony-common.jar from some Android 17 stock ROM behave like this.
+  method_verifier.cc enforces everything to be legal, but many codes inside mediatek-telephony-common are not.
+  They are actually not used on modern MTK devices at all, but still compiled into the package.
+  Removing the checks here works around the massive amount of dex2oat verifier errors, but does not affect runtime.
+
+* Tested on Xaga.
+---
+ runtime/verifier/method_verifier.cc | 46 +----------------------------
+ 1 file changed, 1 insertion(+), 45 deletions(-)
+
+diff --git a/runtime/verifier/method_verifier.cc b/runtime/verifier/method_verifier.cc
+index 943e2781c3..094a41cc4e 100644
+--- a/runtime/verifier/method_verifier.cc
++++ b/runtime/verifier/method_verifier.cc
+@@ -4744,34 +4744,7 @@ ArtMethod* MethodVerifierImpl::ResolveMethodAndCheckAccess(
+                                  << "method resolution.";
+     return nullptr;
+   }
+-  // Check if access is allowed.
+-  if (!CanAccessMember(res_method->GetDeclaringClass(), res_method->GetAccessFlags())) {
+-    Fail(VERIFY_ERROR_ACCESS_METHOD) << "illegal method access (call "
+-                                     << res_method->PrettyMethod()
+-                                     << " from " << GetDeclaringClass() << ")";
+-    return res_method;
+-  }
+-  // Check that invoke-virtual and invoke-super are not used on private methods of the same class.
+-  if (res_method->IsPrivate() && (method_type == METHOD_VIRTUAL || method_type == METHOD_SUPER)) {
+-    Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "invoke-super/virtual can't be used on private method "
+-                                      << res_method->PrettyMethod();
+-    return nullptr;
+-  }
+-  // See if the method type implied by the invoke instruction matches the access flags for the
+-  // target method. The flags for METHOD_POLYMORPHIC are based on there being precisely two
+-  // signature polymorphic methods supported by the run-time which are native methods with variable
+-  // arguments.
+-  if ((method_type == METHOD_DIRECT && (!res_method->IsDirect() || res_method->IsStatic())) ||
+-      (method_type == METHOD_STATIC && !res_method->IsStatic()) ||
+-      ((method_type == METHOD_SUPER ||
+-        method_type == METHOD_VIRTUAL ||
+-        method_type == METHOD_INTERFACE) && res_method->IsDirect()) ||
+-      ((method_type == METHOD_POLYMORPHIC) &&
+-       (!res_method->IsNative() || !res_method->IsVarargs()))) {
+-    Fail(VERIFY_ERROR_CLASS_CHANGE) << "invoke type (" << method_type << ") does not match method "
+-                                       "type of " << res_method->PrettyMethod();
+-    return nullptr;
+-  }
++
+   // Make sure we weren't expecting to fail.
+   DCHECK(!must_fail) << "invoke type (" << method_type << ")"
+                      << klass->PrettyDescriptor() << "."
+@@ -4852,23 +4825,6 @@ ArtMethod* MethodVerifierImpl::VerifyInvocationArgsFromIterator(
+           res_method_class = &reg_types_.FromClass(klass);
+         }
+       }
+-      if (!IsAssignableFrom(*res_method_class, adjusted_type)) {
+-        // We return a soft unresolved type check failure as long as:
+-        //   1) `adjusted_type` is unresolved
+-        //   2) `res_method_class` is not a non-array final class.
+-        // In this case, potentially the unresolved class becomes resolved and everything is okay.
+-        const bool soft_unresolved_failure =
+-            adjusted_type.IsUnresolvedTypes() && !res_method_class->IsNonArrayFinalClass();
+-        Fail(soft_unresolved_failure ? VERIFY_ERROR_UNRESOLVED_TYPE_CHECK
+-                                     : VERIFY_ERROR_BAD_CLASS_HARD)
+-            << "'this' argument '" << actual_arg_type << "' not instance of '" << *res_method_class
+-            << "'";
+-        // Continue on soft failures. We need to find possible hard failures to avoid problems in
+-        // the compiler.
+-        if (flags_.have_pending_hard_failure_) {
+-          return nullptr;
+-        }
+-      }
+     }
+   }
+ 
+-- 
+2.55.0
+
