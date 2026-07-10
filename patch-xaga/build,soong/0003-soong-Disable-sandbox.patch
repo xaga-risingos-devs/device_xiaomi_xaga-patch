@@ -1,0 +1,28 @@
+From 77286ba20dcdd538b902a3a1e3a9722ca04aeef5 Mon Sep 17 00:00:00 2001
+From: Hecheng Yu <kde-yyds@qq.com>
+Date: Fri, 10 Jul 2026 16:35:53 +0800
+Subject: [PATCH 3/3] soong: Disable sandbox
+
+Change-Id: I28364713a862422da00ae2d1903e03fa11c5e206
+---
+ ui/build/sandbox_linux.go | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/ui/build/sandbox_linux.go b/ui/build/sandbox_linux.go
+index 441161d9cd..d16e6418fe 100644
+--- a/ui/build/sandbox_linux.go
++++ b/ui/build/sandbox_linux.go
+@@ -76,9 +76,7 @@ func (c *Cmd) envForSandbox(env *Environment) []string {
+ }
+ 
+ func (c *Cmd) sandboxSupported() bool {
+-	if !c.Sandbox.Enabled {
+-		return false
+-	}
++	return false
+ 
+ 	sandboxConfig.once.Do(func() {
+ 		sandboxConfig.group = "nogroup"
+-- 
+2.55.0
+
