@@ -1,0 +1,153 @@
+From 9c13b31b7a3a16be58fcd0f12e7ef18ca0e88b51 Mon Sep 17 00:00:00 2001
+From: Hecheng Yu <kde-yyds@qq.com>
+Date: Tue, 30 Jun 2026 13:36:33 +0800
+Subject: [PATCH] Add optional home to app and app to home animation background
+ blur
+
+---
+ .../com/android/launcher3/QuickstepTransitionManager.java | 8 +++++---
+ .../android/quickstep/util/ScalingWorkspaceRevealAnim.kt  | 3 ++-
+ res/values-zh-rCN/blur_strings.xml                        | 5 +++++
+ res/values/blur_strings.xml                               | 5 +++++
+ res/xml/launcher_preferences.xml                          | 8 ++++++++
+ src/com/android/launcher3/LauncherPrefs.kt                | 1 +
+ src/com/android/launcher3/Utilities.java                  | 4 ++++
+ 7 files changed, 30 insertions(+), 4 deletions(-)
+ create mode 100644 res/values-zh-rCN/blur_strings.xml
+ create mode 100644 res/values/blur_strings.xml
+
+diff --git a/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java b/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java
+index 10fa95bc7f..41a8999052 100644
+--- a/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java
++++ b/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java
+@@ -252,7 +252,7 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
+     private final float mClosingFreeformWindowTransY;
+     private final float mMaxShadowRadius;
+     private final int mMaxBlurRadius;
+-    private final boolean mIsAppLaunchBlurEnabled;
++    private boolean mIsAppLaunchBlurEnabled;
+ 
+     private final StartingWindowListener mStartingWindowListener = new StartingWindowListener();
+ 
+@@ -368,8 +368,7 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
+ 
+         mMaxBlurRadius = res.getDimensionPixelSize(
+                 R.dimen.max_depth_blur_radius_enhanced);
+-        mIsAppLaunchBlurEnabled = appLaunchBlur() && res.getBoolean(
+-                com.android.internal.R.bool.config_enableAppLaunchBlur);
++        mIsAppLaunchBlurEnabled = Utilities.blurBackgroundAtAppLaunch(mLauncher.getApplicationContext());
+     }
+ 
+     @Override
+@@ -861,6 +860,7 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
+             AnimatedSurface[] wallpaperSurfaces,
+             AnimatedSurface[] nonAppSurfaces,
+             boolean launcherClosing) {
++        mIsAppLaunchBlurEnabled = Utilities.blurBackgroundAtAppLaunch(mLauncher.getApplicationContext());
+         AnimatedSurfaces openingSurfaces = AnimatedSurfaces.from(appSurfaces,
+                 wallpaperSurfaces, nonAppSurfaces, AnimatedSurface.Mode.OPENING);
+         int rotationChange = getRotationChange(appSurfaces);
+@@ -1168,6 +1168,7 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
+             AnimatedSurface[] appSurfaces,
+             AnimatedSurface[] wallpaperSurfaces,
+             AnimatedSurface[] nonAppSurfaces, boolean launcherClosing) {
++        mIsAppLaunchBlurEnabled = Utilities.blurBackgroundAtAppLaunch(mLauncher.getApplicationContext());
+         Rect windowTargetBounds = getWindowTargetBounds(appSurfaces,
+                 getRotationChange(appSurfaces));
+         boolean appTargetsAreTranslucent = areAllSurfacesTranslucent(appSurfaces);
+@@ -1316,6 +1317,7 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
+ 
+     private SurfaceControl addScrimLayer(SurfaceTransactionApplier applier,
+             AnimatedSurfaces surfaces) {
++        mIsAppLaunchBlurEnabled = Utilities.blurBackgroundAtAppLaunch(mLauncher.getApplicationContext());
+         if (!mIsAppLaunchBlurEnabled) {
+             return null;
+         }
+diff --git a/quickstep/src/com/android/quickstep/util/ScalingWorkspaceRevealAnim.kt b/quickstep/src/com/android/quickstep/util/ScalingWorkspaceRevealAnim.kt
+index b1385707ef..4e10473f4d 100644
+--- a/quickstep/src/com/android/quickstep/util/ScalingWorkspaceRevealAnim.kt
++++ b/quickstep/src/com/android/quickstep/util/ScalingWorkspaceRevealAnim.kt
+@@ -38,6 +38,7 @@ import com.android.launcher3.LauncherAnimUtils.HOTSEAT_SCALE_PROPERTY_FACTORY
+ import com.android.launcher3.LauncherAnimUtils.SCALE_INDEX_WORKSPACE_STATE
+ import com.android.launcher3.LauncherAnimUtils.VIEW_ALPHA
+ import com.android.launcher3.LauncherAnimUtils.WORKSPACE_SCALE_PROPERTY_FACTORY
++import com.android.launcher3.LauncherPrefs
+ import com.android.launcher3.LauncherState
+ import com.android.launcher3.R
+ import com.android.launcher3.anim.AnimatorListeners
+@@ -313,7 +314,7 @@ class ScalingWorkspaceRevealAnim(
+     }
+ 
+     private fun addBlurLayer() {
+-        if (!Flags.blurredHomeAnimation()) {
++        if (!LauncherPrefs.ANIMATION_BLUR.get(launcher.applicationContext)) {
+             return
+         }
+         val parent = launcher.dragLayer.viewRootImpl?.surfaceControl ?: return
+diff --git a/res/values-zh-rCN/blur_strings.xml b/res/values-zh-rCN/blur_strings.xml
+new file mode 100644
+index 0000000000..10eab46273
+--- /dev/null
++++ b/res/values-zh-rCN/blur_strings.xml
+@@ -0,0 +1,5 @@
++<resources>
++    <!-- Background blur at app launch-->
++    <string name="pref_blur_background_at_app_launch_title">动画背景模糊</string>
++    <string name="pref_blur_background_at_app_launch_summary">为app启动与退出动画添加背景模糊</string>
++</resources>
+diff --git a/res/values/blur_strings.xml b/res/values/blur_strings.xml
+new file mode 100644
+index 0000000000..65c0a96ee2
+--- /dev/null
++++ b/res/values/blur_strings.xml
+@@ -0,0 +1,5 @@
++<resources>
++    <!-- Background blur at app launch-->
++    <string name="pref_blur_background_at_app_launch_title">Background blur at app launch and exit</string>
++    <string name="pref_blur_background_at_app_launch_summary">Blur the background at app launch and exit</string>
++</resources>
+diff --git a/res/xml/launcher_preferences.xml b/res/xml/launcher_preferences.xml
+index 0e3a16371c..2516fe39b2 100644
+--- a/res/xml/launcher_preferences.xml
++++ b/res/xml/launcher_preferences.xml
+@@ -97,4 +97,12 @@
+         android:key="pref_trust_apps"
+         android:title="@string/trust_apps_manager_name" />
+ 
++
++    <SwitchPreferenceCompat
++        android:key="pref_blur_background_at_app_launch"
++        android:title="@string/pref_blur_background_at_app_launch_title"
++        android:summary="@string/pref_blur_background_at_app_launch_summary"
++        android:defaultValue="true"
++        android:persistent="true" />
++
+ </androidx.preference.PreferenceScreen>
+diff --git a/src/com/android/launcher3/LauncherPrefs.kt b/src/com/android/launcher3/LauncherPrefs.kt
+index fde9740f8f..c5677b44be 100644
+--- a/src/com/android/launcher3/LauncherPrefs.kt
++++ b/src/com/android/launcher3/LauncherPrefs.kt
+@@ -270,6 +270,7 @@ constructor(@ApplicationContext private val encryptedContext: Context) {
+         @JvmField
+         val PROMISE_ICON_IDS = nonRestorableItem(InstallSessionHelper.PROMISE_ICON_IDS, "")
+         @JvmField val WORK_EDU_STEP = backedUpItem("showed_work_profile_edu", 0)
++        @JvmField val ANIMATION_BLUR = backedUpItem("pref_blur_background_at_app_launch", true)
+         @JvmField
+         val WORKSPACE_SIZE =
+             backedUpItem(DeviceGridState.KEY_WORKSPACE_SIZE, "", EncryptionType.ENCRYPTED)
+diff --git a/src/com/android/launcher3/Utilities.java b/src/com/android/launcher3/Utilities.java
+index 1242cd8e49..6f012d1043 100644
+--- a/src/com/android/launcher3/Utilities.java
++++ b/src/com/android/launcher3/Utilities.java
+@@ -946,4 +946,8 @@ public final class Utilities {
+     public static boolean isWorkspaceEditAllowed(Context context) {
+         return !LauncherPrefs.WORKSPACE_LOCK.get(context);
+     }
++
++    public static boolean blurBackgroundAtAppLaunch(Context context) {
++        return LauncherPrefs.ANIMATION_BLUR.get(context);
++    }
+ }
+-- 
+2.55.0
+
