@@ -36,7 +36,4 @@
     <project path="external/lxc" remote="github-custom" revision="lindroid-21" name="Linux-on-droid/external_lxc" />
     <project path="external/lindroid-drm-loopback" remote="github-custom" revision="master" name="Linux-on-droid/lindroid-drm-loopback" />
 
-    <!-- Dolby Atmos -->
-    <project path="packages/apps/DolbyAtmos" remote="github-custom" revision="16.0" name="crdroidandroid/android_packages_apps_DolbyAtmos" />
-
 </manifest>
