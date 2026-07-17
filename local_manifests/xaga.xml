@@ -29,11 +29,4 @@
 
     <!-- Patches -->
     <project path="patches-crdroid" remote="github-custom" revision="lineage-23.2" name="xaga-risingos-devs/patches-crdroid" />
-
-    <!-- Lindroid -->
-    <project path="vendor/lindroid" remote="github-custom" revision="lindroid-22.1" name="Linux-on-droid/vendor_lindroid" />
-    <project path="libhybris" remote="github-custom" revision="lindroid-21" name="Linux-on-droid/libhybris" />
-    <project path="external/lxc" remote="github-custom" revision="lindroid-21" name="Linux-on-droid/external_lxc" />
-    <project path="external/lindroid-drm-loopback" remote="github-custom" revision="master" name="Linux-on-droid/lindroid-drm-loopback" />
-
 </manifest>
