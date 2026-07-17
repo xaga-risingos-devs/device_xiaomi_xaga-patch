@@ -1,0 +1,79 @@
+From c06d53cdf34ba9bd6ffbffd667bdd31b842cf380 Mon Sep 17 00:00:00 2001
+From: Hecheng Yu <kde-yyds@qq.com>
+Date: Tue, 30 Jun 2026 12:12:43 +0800
+Subject: [PATCH 4/7] Revert "Launcher3: Optimizing app to workspace animation"
+
+This reverts commit 2a22f2787ec8868d8458799f5ec253d10af90fad.
+---
+ .../quickstep/util/BaseDepthController.java   | 21 ++-----------------
+ .../util/ScalingWorkspaceRevealAnim.kt        |  6 ------
+ 2 files changed, 2 insertions(+), 25 deletions(-)
+
+diff --git a/quickstep/src/com/android/quickstep/util/BaseDepthController.java b/quickstep/src/com/android/quickstep/util/BaseDepthController.java
+index 41de6fa..6e9cbb8 100644
+--- a/quickstep/src/com/android/quickstep/util/BaseDepthController.java
++++ b/quickstep/src/com/android/quickstep/util/BaseDepthController.java
+@@ -47,7 +47,6 @@ import com.android.launcher3.statemanager.StateManager;
+ import com.android.launcher3.uioverrides.QuickstepLauncher;
+ import com.android.launcher3.util.MultiPropertyFactory;
+ import com.android.launcher3.util.MultiPropertyFactory.MultiProperty;
+-import com.android.launcher3.util.Executors;
+ import com.android.systemui.shared.system.BlurUtils;
+ 
+ /**
+@@ -91,8 +90,6 @@ public class BaseDepthController {
+     protected final WallpaperManager mWallpaperManager;
+     protected boolean mCrossWindowBlursEnabled;
+ 
+-    private float mLastWallpaperZoom = -1f;
+-
+     /**
+      * Ratio from 0 to 1, where 0 is fully zoomed out, and 1 is zoomed in.
+      *
+@@ -204,22 +201,8 @@ public class BaseDepthController {
+         float depth = mDepth;
+         IBinder windowToken = mLauncher.getRootView().getWindowToken();
+         if (windowToken != null) {
+-                float zoom = LauncherPrefs.ALLOW_WALLPAPER_ZOOMING.get(mLauncher)
+-            ? depth
+-            : 0f;
+-
+-            if (Math.abs(mLastWallpaperZoom - zoom) >= 0.03f
+-                    || (zoom == 0f && mLastWallpaperZoom != 0f)
+-                    || (zoom == 1f && mLastWallpaperZoom != 1f)) {
+-
+-                final float finalZoom = zoom;
+-
+-                Executors.UI_HELPER_EXECUTOR.execute(() -> {
+-                    mWallpaperManager.setWallpaperZoomOut(windowToken, finalZoom);
+-                });
+-
+-                mLastWallpaperZoom = zoom;
+-            }
++            mWallpaperManager.setWallpaperZoomOut(windowToken,
++                    LauncherPrefs.ALLOW_WALLPAPER_ZOOMING.get(mLauncher) ? depth : 1);
+         }
+ 
+         if (!BlurUtils.supportsBlursOnWindows()) {
+diff --git a/quickstep/src/com/android/quickstep/util/ScalingWorkspaceRevealAnim.kt b/quickstep/src/com/android/quickstep/util/ScalingWorkspaceRevealAnim.kt
+index 1ebd34a..158a6d6 100644
+--- a/quickstep/src/com/android/quickstep/util/ScalingWorkspaceRevealAnim.kt
++++ b/quickstep/src/com/android/quickstep/util/ScalingWorkspaceRevealAnim.kt
+@@ -195,14 +195,8 @@ class ScalingWorkspaceRevealAnim(
+                 )
+             val blurAnimator = ValueAnimator.ofFloat(1f, 0f)
+             blurAnimator.setInterpolator(BLUR_INTERPOLATOR)
+-            var lastBlurRadius = -1
+             blurAnimator.addUpdateListener {
+                 applyBlur(maxBlurRadius * blurAnimator.animatedValue as Float)
+-                val blurRadius = (maxBlurRadius * blurAnimator.animatedValue as Float).toInt()
+-                if (Math.abs(lastBlurRadius - blurRadius) >= 4) {
+-                    applyBlur(blurRadius.toFloat())
+-                    lastBlurRadius = blurRadius
+-                }
+             }
+             animation.add(blurAnimator)
+ 
+-- 
+2.55.0
+

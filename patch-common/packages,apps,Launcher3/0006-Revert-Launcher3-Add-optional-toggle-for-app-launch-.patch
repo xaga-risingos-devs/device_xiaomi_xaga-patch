@@ -1,0 +1,146 @@
+From fd3c251abd2afb6f2e638762501d559298c3c4b3 Mon Sep 17 00:00:00 2001
+From: Hecheng Yu <kde-yyds@qq.com>
+Date: Sat, 11 Jul 2026 12:19:18 +0800
+Subject: [PATCH 6/7] Revert "Launcher3: Add optional toggle for app launch
+ blur animation"
+
+This reverts commit 0c50298bd0ed2fa68e3404bec1c6c4255fe82637.
+---
+ .../launcher3/QuickstepTransitionManager.java     | 15 +++++----------
+ res/values/cr_strings.xml                         |  4 ----
+ res/xml/launcher_home_screen_preferences.xml      |  8 --------
+ src/com/android/launcher3/LauncherPrefs.kt        |  1 -
+ .../launcher3/settings/SettingsHomescreen.java    |  3 +--
+ 5 files changed, 6 insertions(+), 25 deletions(-)
+
+diff --git a/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java b/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java
+index 71134f5..a8cceba 100644
+--- a/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java
++++ b/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java
+@@ -53,7 +53,6 @@ import static com.android.launcher3.Flags.appLaunchBlur;
+ import static com.android.launcher3.Flags.refactorTaskbarUiState;
+ import static com.android.launcher3.Flags.syncAppLaunchWithTaskbarStash;
+ import static com.android.launcher3.LauncherAnimUtils.SCALE_PROPERTY;
+-import static com.android.launcher3.LauncherPrefs.APP_LAUNCH_BLUR_ENABLED;
+ import static com.android.launcher3.LauncherState.ALL_APPS;
+ import static com.android.launcher3.LauncherState.BACKGROUND_APP;
+ import static com.android.launcher3.LauncherState.NORMAL;
+@@ -877,7 +876,7 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
+                 if (taskbarInteractor != null) {
+                     taskbarInteractor.showEduOnAppLaunch();
+                 }
+-                if (appLaunchBlur() && isAppLaunchBlurEnabled()) {
++                if (appLaunchBlur()) {
+                     resetScrim(surfaceApplier, scrimLayer);
+                 }
+                 openingTargets.release();
+@@ -1089,7 +1088,7 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
+                     }
+                 }
+ 
+-                if (appLaunchBlur() && isAppLaunchBlurEnabled() && scrimLayer != null && scrimLayer.isValid()) {
++                if (appLaunchBlur() && scrimLayer != null && scrimLayer.isValid()) {
+                     SurfaceProperties builder = transaction.forSurface(scrimLayer);
+                     builder.setAlpha(percent * scrimAlpha);
+                     builder.setBackgroundBlurRadius((int) (percent * mMaxBlurRadius));
+@@ -1164,7 +1163,7 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
+         appAnimator.addListener(new AnimatorListenerAdapter() {
+             @Override
+             public void onAnimationEnd(Animator animation) {
+-                if (appLaunchBlur() && isAppLaunchBlurEnabled()) {
++                if (appLaunchBlur()) {
+                     resetScrim(surfaceApplier, scrimLayer);
+                 }
+                 openingTargets.release();
+@@ -1247,7 +1246,7 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
+                     }
+                 }
+ 
+-                if (appLaunchBlur() && isAppLaunchBlurEnabled() && scrimLayer != null && scrimLayer.isValid()) {
++                if (appLaunchBlur() && scrimLayer != null && scrimLayer.isValid()) {
+                     SurfaceProperties builder = transaction.forSurface(scrimLayer);
+                     builder.setAlpha(percent * scrimAlpha);
+                     builder.setBackgroundBlurRadius((int) (percent * mMaxBlurRadius));
+@@ -1269,7 +1268,7 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
+ 
+     private SurfaceControl addScrimLayer(SurfaceTransactionApplier applier,
+             RemoteAnimationTargets targets) {
+-        if (!appLaunchBlur() || !isAppLaunchBlurEnabled()) {
++        if (!appLaunchBlur()) {
+             return null;
+         }
+ 
+@@ -1376,10 +1375,6 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
+         }
+     }
+ 
+-    private boolean isAppLaunchBlurEnabled() {
+-        return LauncherPrefs.get(mLauncher).get(APP_LAUNCH_BLUR_ENABLED);
+-    }
+-
+     /** Returns animator that controls depth/blur of the background during app/widget opening. */
+     private Animator getBackgroundAnimator() {
+         if (Flags.allAppsBlur()) {
+diff --git a/res/values/cr_strings.xml b/res/values/cr_strings.xml
+index 4cca4bc..e577cf3 100644
+--- a/res/values/cr_strings.xml
++++ b/res/values/cr_strings.xml
+@@ -510,10 +510,6 @@
+     <string name="rename_app_reset">Reset</string>
+     <string name="rename_app_reset_message">Name reset to original</string>
+ 
+-    <!-- App launch blur -->
+-    <string name="pref_app_launch_blur_title">App launch blur</string>
+-    <string name="pref_app_launch_blur_summary">Show blur effect when launching apps</string>
+-
+     <!-- Custom icon -->
+     <string name="app_info_custom_icon_title">Custom icon</string>
+     <string name="app_info_custom_icon_summary">Pick any icon from any icon pack</string>
+diff --git a/res/xml/launcher_home_screen_preferences.xml b/res/xml/launcher_home_screen_preferences.xml
+index 519fc8e..e7a0a53 100644
+--- a/res/xml/launcher_home_screen_preferences.xml
++++ b/res/xml/launcher_home_screen_preferences.xml
+@@ -109,14 +109,6 @@
+             android:persistent="true"
+             launcher:iconSpaceReserved="false" />
+ 
+-        <SwitchPreferenceCompat
+-            android:key="pref_app_launch_blur"
+-            android:title="@string/pref_app_launch_blur_title"
+-            android:summary="@string/pref_app_launch_blur_summary"
+-            android:defaultValue="false"
+-            android:persistent="true"
+-            launcher:iconSpaceReserved="false" />
+-
+         <SwitchPreferenceCompat
+             android:key="pref_wallpaper_carousel"
+             android:title="@string/wallpaper_carousel_title"
+diff --git a/src/com/android/launcher3/LauncherPrefs.kt b/src/com/android/launcher3/LauncherPrefs.kt
+index 2704157..26e11d2 100644
+--- a/src/com/android/launcher3/LauncherPrefs.kt
++++ b/src/com/android/launcher3/LauncherPrefs.kt
+@@ -267,7 +267,6 @@ constructor(@ApplicationContext private val encryptedContext: Context) {
+         @JvmField val ALLAPPS_ICON_CUSTOMIZATION = backedUpItem("pref_allapps_icon_customization", true)
+         @JvmField val ALLOW_WALLPAPER_ZOOMING = backedUpItem("pref_allow_wallpaper_zooming", true)
+         @JvmField val APP_DRAWER_CUSTOM_COLOR_ENABLED = backedUpItem("pref_app_drawer_custom_color_enabled", false)
+-        @JvmField val APP_LAUNCH_BLUR_ENABLED = backedUpItem("pref_app_launch_blur", false)
+         @JvmField val APP_DRAWER_CUSTOM_COLOR_LIGHT = backedUpItem("pref_app_drawer_custom_color_light", -1)
+         @JvmField val APP_DRAWER_CUSTOM_COLOR_DARK = backedUpItem("pref_app_drawer_custom_color_dark", -16777216)
+         @JvmField val APP_DRAWER_OPACITY = backedUpItem("pref_app_drawer_opacity", 60)
+diff --git a/src/com/android/launcher3/settings/SettingsHomescreen.java b/src/com/android/launcher3/settings/SettingsHomescreen.java
+index b093499..7320765 100644
+--- a/src/com/android/launcher3/settings/SettingsHomescreen.java
++++ b/src/com/android/launcher3/settings/SettingsHomescreen.java
+@@ -135,8 +135,7 @@ public class SettingsHomescreen extends CollapsingToolbarBaseActivity
+                 LauncherPrefs.SHOW_QUICKSPACE_WEATHER_CITY.getSharedPrefKey().equals(key) ||
+                 LauncherPrefs.SHOW_QUICKSPACE_WEATHER_PROVIDER.getSharedPrefKey().equals(key) ||
+                 LauncherPrefs.SHOW_QUICKSPACE_WEATHER_TEXT.getSharedPrefKey().equals(key) ||
+-                LauncherPrefs.AUTO_HIDE_DOTS.getSharedPrefKey().equals(key) ||
+-                LauncherPrefs.APP_LAUNCH_BLUR_ENABLED.getSharedPrefKey().equals(key)) {
++                LauncherPrefs.AUTO_HIDE_DOTS.getSharedPrefKey().equals(key)) {
+             LauncherAppState.INSTANCE.executeIfCreated(app -> app.setNeedsRestart());
+         }
+     }
+-- 
+2.55.0
+

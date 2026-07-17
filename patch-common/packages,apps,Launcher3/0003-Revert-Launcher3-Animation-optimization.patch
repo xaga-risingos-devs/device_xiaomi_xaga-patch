@@ -1,0 +1,86 @@
+From 90fff70a915eb69350cff80afa42fa17ff793889 Mon Sep 17 00:00:00 2001
+From: Hecheng Yu <kde-yyds@qq.com>
+Date: Tue, 30 Jun 2026 12:12:30 +0800
+Subject: [PATCH 3/7] Revert "Launcher3: Animation optimization"
+
+This reverts commit dd0d05d5f2b77e3181e5393d9e81f819104befd0.
+---
+ .../launcher3/QuickstepTransitionManager.java | 26 ++++++++-----------
+ 1 file changed, 11 insertions(+), 15 deletions(-)
+
+diff --git a/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java b/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java
+index 9275deb..4854ada 100644
+--- a/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java
++++ b/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java
+@@ -209,10 +209,10 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
+      */
+     public static final int STATUS_BAR_TRANSITION_PRE_DELAY = 96;
+ 
+-    public static final long APP_LAUNCH_DURATION = 480;
++    public static final long APP_LAUNCH_DURATION = 450;
+ 
+-    private static final long APP_LAUNCH_ALPHA_DURATION = 125;
+-    private static final long APP_LAUNCH_ALPHA_START_DELAY = 25;
++    private static final long APP_LAUNCH_ALPHA_DURATION = 100;
++    private static final long APP_LAUNCH_ALPHA_START_DELAY = 28;
+ 
+     public static final int ANIMATION_NAV_FADE_IN_DURATION = 266;
+     public static final int ANIMATION_NAV_FADE_OUT_DURATION = 160;
+@@ -237,7 +237,7 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
+     // is solved.
+     private static final int TASKBAR_TO_HOME_DURATION_FAST = 300;
+     private static final int TASKBAR_TO_HOME_DURATION_SLOW = 1000;
+-    protected static final int CONTENT_SCALE_DURATION = 350;
++    protected static final int CONTENT_SCALE_DURATION = 300;
+ 
+     private static final int MAX_NUM_TASKS = 5;
+ 
+@@ -328,8 +328,10 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
+             mSystemUiProxy.setStartingWindowListener(mStartingWindowListener);
+         }
+ 
+-        mOpeningXInterpolator = new PathInterpolator(0.2f, 0f, 0f, 1f);
+-        mOpeningInterpolator = new PathInterpolator(0.2f, 0f, 0f, 1f);
++        mOpeningXInterpolator = AnimationUtils.loadInterpolator(
++                launcher, R.interpolator.app_open_x);
++        mOpeningInterpolator = AnimationUtils.loadInterpolator(
++                launcher, R.interpolator.emphasized_interpolator);
+         mCoordinateTransfer = new RemoteAnimationCoordinateTransfer(mLauncher);
+         mLatencyTracker = LatencyTracker.getInstance(launcher);
+ 
+@@ -2497,7 +2499,7 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
+             final DeviceProfile profile = mLauncher.getDeviceProfile();
+             final int rotation = profile.getDeviceProperties().getRotationHint();
+             final int widthPx = profile.getDeviceProperties().getWidthPx();
+-            final int heightPx = profile.getDeviceProperties().getHeightPx();
++            final int heightPx = profile.getDeviceProperties().getWidthPx();
+ 
+             final int rotationDelta = toLauncher
+                     ? android.util.RotationUtils.deltaRotation(taskRotation, rotation)
+@@ -2533,7 +2535,6 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
+         private final Rect mWindowStartBounds = new Rect();
+         private final Rect mWindowOriginalBounds = new Rect();
+ 
+-        private float mLastCornerRadius = -1f;
+         private final Rect mTmpRect = new Rect();
+         private final SurfaceTransaction mTransaction = new SurfaceTransaction();
+ 
+@@ -2632,13 +2633,8 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
+ 
+                     builder.setMatrix(mMatrix)
+                             .setWindowCrop(mTmpRect)
+-                            .setAlpha(getWindowAlpha(progress));
+-
+-                    float cornerRadius = getCornerRadius(progress) / scale;
+-                    if (Math.abs(mLastCornerRadius - cornerRadius) >= 4f || progress >= 1f) {
+-                        builder.setCornerRadius(cornerRadius);
+-                        mLastCornerRadius = cornerRadius;
+-                    }
++                            .setAlpha(getWindowAlpha(progress))
++                            .setCornerRadius(getCornerRadius(progress) / scale);
+                 } else if (target.mode == MODE_OPENING) {
+                     mMatrix.setTranslate(mTmpPos.x, mTmpPos.y);
+                     builder.setMatrix(mMatrix)
+-- 
+2.55.0
+

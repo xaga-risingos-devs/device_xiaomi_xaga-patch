@@ -1,0 +1,38 @@
+From bb39a9eb12428f719bf39d819f2b17990aeefc05 Mon Sep 17 00:00:00 2001
+From: Hecheng Yu <kde-yyds@qq.com>
+Date: Tue, 30 Jun 2026 12:11:18 +0800
+Subject: [PATCH 2/7] Revert "Launcher3: Update app launch blur interpolation"
+
+This reverts commit 04ec955dfa474d7aad103adce513c7d059a12cdd.
+---
+ .../com/android/launcher3/QuickstepTransitionManager.java  | 7 ++-----
+ 1 file changed, 2 insertions(+), 5 deletions(-)
+
+diff --git a/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java b/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java
+index 0d620a2..9275deb 100644
+--- a/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java
++++ b/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java
+@@ -940,9 +940,6 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
+                     NAV_FADE_IN_INTERPOLATOR, ANIMATION_DELAY_NAV_FADE_IN,
+                     ANIMATION_NAV_FADE_IN_DURATION, APP_LAUNCH_DURATION));
+ 
+-            FloatProp mBlurRadius = new FloatProp(0f, mMaxBlurRadius, DECELERATE_1_5);
+-            FloatProp mBlurScrimAlpha = new FloatProp(0f, scrimAlpha, DECELERATE_1_5);
+-
+             @Override
+             public void onUpdate(float percent, boolean initOnly) {
+                 if (cropToInset && bottomInsetPos[0] != cachedNavbarInset[0]) {
+@@ -1093,8 +1090,8 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
+ 
+                 if (appLaunchBlur() && isAppLaunchBlurEnabled() && scrimLayer != null && scrimLayer.isValid()) {
+                     SurfaceProperties builder = transaction.forSurface(scrimLayer);
+-                    builder.setAlpha(mBlurScrimAlpha.value);
+-                    builder.setBackgroundBlurRadius((int) mBlurRadius.value);
++                    builder.setAlpha(percent * scrimAlpha);
++                    builder.setBackgroundBlurRadius((int) (percent * mMaxBlurRadius));
+                 }
+ 
+                 surfaceApplier.scheduleApply(transaction);
+-- 
+2.55.0
+
