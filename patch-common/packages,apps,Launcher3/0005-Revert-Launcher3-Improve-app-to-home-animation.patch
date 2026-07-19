@@ -1,7 +1,7 @@
-From 33cd80a09b1a8c57f6ab8d12e610dd795a24412d Mon Sep 17 00:00:00 2001
+From 248dae91556df36d42b436a25f60fc678bbb66d9 Mon Sep 17 00:00:00 2001
 From: Hecheng Yu <kde-yyds@qq.com>
 Date: Tue, 30 Jun 2026 12:12:51 +0800
-Subject: [PATCH 5/7] Revert "Launcher3: Improve app to home animation"
+Subject: [PATCH 5/8] Revert "Launcher3: Improve app to home animation"
 
 This reverts commit 1b853b1dc6ac21084727e126b47c8e6c641ce016.
 ---
@@ -161,5 +161,5 @@ index 158a6d6..74b3e31 100644
              )
  
 -- 
-2.55.0
+2.54.0
 

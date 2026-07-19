@@ -1,7 +1,7 @@
-From fd3c251abd2afb6f2e638762501d559298c3c4b3 Mon Sep 17 00:00:00 2001
+From 9a2b94005c43aedf4a8819ac30f3c2cbebc82b1b Mon Sep 17 00:00:00 2001
 From: Hecheng Yu <kde-yyds@qq.com>
 Date: Sat, 11 Jul 2026 12:19:18 +0800
-Subject: [PATCH 6/7] Revert "Launcher3: Add optional toggle for app launch
+Subject: [PATCH 6/8] Revert "Launcher3: Add optional toggle for app launch
  blur animation"
 
 This reverts commit 0c50298bd0ed2fa68e3404bec1c6c4255fe82637.
@@ -142,5 +142,5 @@ index b093499..7320765 100644
          }
      }
 -- 
-2.55.0
+2.54.0
 

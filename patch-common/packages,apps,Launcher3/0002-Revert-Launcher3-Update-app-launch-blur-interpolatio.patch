@@ -1,7 +1,7 @@
-From bb39a9eb12428f719bf39d819f2b17990aeefc05 Mon Sep 17 00:00:00 2001
+From 338aafb818e8744fab4eec33f8d8542a2fe5a627 Mon Sep 17 00:00:00 2001
 From: Hecheng Yu <kde-yyds@qq.com>
 Date: Tue, 30 Jun 2026 12:11:18 +0800
-Subject: [PATCH 2/7] Revert "Launcher3: Update app launch blur interpolation"
+Subject: [PATCH 2/8] Revert "Launcher3: Update app launch blur interpolation"
 
 This reverts commit 04ec955dfa474d7aad103adce513c7d059a12cdd.
 ---
@@ -34,5 +34,5 @@ index 0d620a2..9275deb 100644
  
                  surfaceApplier.scheduleApply(transaction);
 -- 
-2.55.0
+2.54.0
 

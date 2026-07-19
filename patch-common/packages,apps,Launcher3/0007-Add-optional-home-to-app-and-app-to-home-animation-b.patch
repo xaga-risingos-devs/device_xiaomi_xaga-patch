@@ -1,7 +1,7 @@
-From a56aaa1986b8cc0c3a154bc7c83d18b00ab197b9 Mon Sep 17 00:00:00 2001
+From 5de1601aaa57db8d88b84573563d8f3668c57857 Mon Sep 17 00:00:00 2001
 From: Hecheng Yu <kde-yyds@qq.com>
 Date: Tue, 30 Jun 2026 13:36:33 +0800
-Subject: [PATCH 7/7] Add optional home to app and app to home animation
+Subject: [PATCH 7/8] Add optional home to app and app to home animation
  background blur
 
 ---
@@ -189,5 +189,5 @@ index 84e369e..fb73382 100644
 +    }
  }
 -- 
-2.55.0
+2.54.0
 

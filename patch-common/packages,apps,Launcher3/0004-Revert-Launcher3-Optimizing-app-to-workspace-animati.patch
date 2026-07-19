@@ -1,7 +1,7 @@
-From c06d53cdf34ba9bd6ffbffd667bdd31b842cf380 Mon Sep 17 00:00:00 2001
+From b4106f9661d3a6c6f6a448ab85d2b4bb1036eb17 Mon Sep 17 00:00:00 2001
 From: Hecheng Yu <kde-yyds@qq.com>
 Date: Tue, 30 Jun 2026 12:12:43 +0800
-Subject: [PATCH 4/7] Revert "Launcher3: Optimizing app to workspace animation"
+Subject: [PATCH 4/8] Revert "Launcher3: Optimizing app to workspace animation"
 
 This reverts commit 2a22f2787ec8868d8458799f5ec253d10af90fad.
 ---
@@ -75,5 +75,5 @@ index 1ebd34a..158a6d6 100644
              animation.add(blurAnimator)
  
 -- 
-2.55.0
+2.54.0
 

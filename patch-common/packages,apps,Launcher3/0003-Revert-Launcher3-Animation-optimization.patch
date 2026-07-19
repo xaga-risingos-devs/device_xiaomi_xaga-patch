@@ -1,7 +1,7 @@
-From 90fff70a915eb69350cff80afa42fa17ff793889 Mon Sep 17 00:00:00 2001
+From 71b95fdc204d76078bdad23406daa80e537bfb58 Mon Sep 17 00:00:00 2001
 From: Hecheng Yu <kde-yyds@qq.com>
 Date: Tue, 30 Jun 2026 12:12:30 +0800
-Subject: [PATCH 3/7] Revert "Launcher3: Animation optimization"
+Subject: [PATCH 3/8] Revert "Launcher3: Animation optimization"
 
 This reverts commit dd0d05d5f2b77e3181e5393d9e81f819104befd0.
 ---
@@ -82,5 +82,5 @@ index 9275deb..4854ada 100644
                      mMatrix.setTranslate(mTmpPos.x, mTmpPos.y);
                      builder.setMatrix(mMatrix)
 -- 
-2.55.0
+2.54.0
 

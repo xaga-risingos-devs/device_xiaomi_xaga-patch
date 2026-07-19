@@ -1,0 +1,25 @@
+From 9f7f2c0bea1ebbd33eec70bd39f348ef4f0015e7 Mon Sep 17 00:00:00 2001
+From: Hecheng Yu <kde-yyds@qq.com>
+Date: Sun, 19 Jul 2026 14:49:17 +0800
+Subject: [PATCH 8/8] launcher3: App launch blur radius * 2
+
+---
+ .../src/com/android/launcher3/QuickstepTransitionManager.java   | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java b/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java
+index cc90ad2..d326c58 100644
+--- a/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java
++++ b/quickstep/src/com/android/launcher3/QuickstepTransitionManager.java
+@@ -337,7 +337,7 @@ public class QuickstepTransitionManager implements OnDeviceProfileChangeListener
+         mLatencyTracker = LatencyTracker.getInstance(launcher);
+ 
+         mMaxBlurRadius = launcher.getResources().getDimensionPixelSize(
+-                R.dimen.max_depth_blur_radius_enhanced);
++                R.dimen.max_depth_blur_radius_enhanced) * 2;
+     }
+ 
+     @Override
+-- 
+2.54.0
+
