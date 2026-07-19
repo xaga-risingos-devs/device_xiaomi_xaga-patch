@@ -1,0 +1,33 @@
+From 15d06409f8701a77199f1e03abbf3485e5a6bbb9 Mon Sep 17 00:00:00 2001
+From: Hecheng Yu <kde-yyds@qq.com>
+Date: Sun, 19 Jul 2026 14:10:18 +0800
+Subject: [PATCH 3/3] HapticFeedbackVibrationProvider:
+ GESTURE_THRESHOLD_ACTIVATE -> EFFECT_CLICK
+
+---
+ .../server/vibrator/HapticFeedbackVibrationProvider.java        | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/services/core/java/com/android/server/vibrator/HapticFeedbackVibrationProvider.java b/services/core/java/com/android/server/vibrator/HapticFeedbackVibrationProvider.java
+index d44735b5b..b15c5a5ca 100644
+--- a/services/core/java/com/android/server/vibrator/HapticFeedbackVibrationProvider.java
++++ b/services/core/java/com/android/server/vibrator/HapticFeedbackVibrationProvider.java
+@@ -228,7 +228,6 @@ public final class HapticFeedbackVibrationProvider {
+         switch (effectId) {
+             case HapticFeedbackConstants.CONTEXT_CLICK:
+             case HapticFeedbackConstants.GESTURE_END:
+-            case HapticFeedbackConstants.GESTURE_THRESHOLD_ACTIVATE:
+             case HapticFeedbackConstants.SCROLL_TICK:
+             case HapticFeedbackConstants.SEGMENT_TICK:
+                 return VibrationEffect.get(VibrationEffect.EFFECT_TICK);
+@@ -255,6 +254,7 @@ public final class HapticFeedbackVibrationProvider {
+             case HapticFeedbackConstants.GESTURE_START:
+             case HapticFeedbackConstants.SCROLL_ITEM_FOCUS:
+             case HapticFeedbackConstants.SCROLL_LIMIT:
++            case HapticFeedbackConstants.GESTURE_THRESHOLD_ACTIVATE:
+                 return VibrationEffect.get(VibrationEffect.EFFECT_CLICK);
+ 
+             case HapticFeedbackConstants.LONG_PRESS:
+-- 
+2.54.0
+

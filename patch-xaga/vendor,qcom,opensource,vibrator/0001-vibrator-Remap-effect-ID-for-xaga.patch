@@ -1,0 +1,37 @@
+From c5ca278d81735f71063de151ee2d01f79577aebe Mon Sep 17 00:00:00 2001
+From: Hecheng Yu <kde-yyds@qq.com>
+Date: Sun, 19 Jul 2026 14:19:35 +0800
+Subject: [PATCH] vibrator: Remap effect ID for xaga
+
+Change-Id: I76a9f44acd4ebf893f1e97f5a0321dbcb40ee3dc
+---
+ aidl/VibratorOL/Vibrator.cpp | 13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/aidl/VibratorOL/Vibrator.cpp b/aidl/VibratorOL/Vibrator.cpp
+index 1592922..cf06641 100644
+--- a/aidl/VibratorOL/Vibrator.cpp
++++ b/aidl/VibratorOL/Vibrator.cpp
+@@ -369,7 +369,18 @@ int InputFFDevice::playEffect(int effectId, EffectStrength es, long *playLengthM
+         return -1;
+     }
+ 
+-    return play(effectId, INVALID_VALUE, playLengthMs);
++    int kernelId = effectId;
++    switch (effectId) {
++        case 0: kernelId = 0; break; // CLICK
++        case 1: kernelId = 1; break; // DOUBLE_CLICK (Actually we don't have a double click waveform in firmware)
++        case 2: kernelId = 5; break; // TICK
++        case 3: kernelId = 0; break; // THUD
++        case 4: kernelId = 1; break; // POP
++        case 5: kernelId = 0; break; // HEAVY_CLICK
++        default: kernelId = effectId; break;
++    }
++
++    return play(kernelId, INVALID_VALUE, playLengthMs);
+ }
+ 
+ int InputFFDevice::playPrimitive(int primitiveId, float amplitude, long *playLengthMs) {
+-- 
+2.54.0
+

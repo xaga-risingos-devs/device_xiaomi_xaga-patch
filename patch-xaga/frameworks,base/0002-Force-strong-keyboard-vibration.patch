@@ -1,14 +1,14 @@
-From 2ebd4231494ca646a609dc8f220155f985b9494c Mon Sep 17 00:00:00 2001
+From 815a478aade50ccd4322db1cabc49fdaf20d044e Mon Sep 17 00:00:00 2001
 From: Hecheng Yu <kde-yyds@qq.com>
-Date: Wed, 13 Aug 2025 19:12:24 +0800
-Subject: [PATCH 2/7] Force strong keyboard vibration
+Date: Sun, 19 Jul 2026 15:06:13 +0800
+Subject: [PATCH 2/3] Force strong keyboard vibration
 
 ---
  .../vibrator/VibratorManagerService.java      | 48 ++++++++++++++++---
  1 file changed, 42 insertions(+), 6 deletions(-)
 
 diff --git a/services/core/java/com/android/server/vibrator/VibratorManagerService.java b/services/core/java/com/android/server/vibrator/VibratorManagerService.java
-index f07e9bd28..588701457 100644
+index f07e9bd28..b5ba07cf6 100644
 --- a/services/core/java/com/android/server/vibrator/VibratorManagerService.java
 +++ b/services/core/java/com/android/server/vibrator/VibratorManagerService.java
 @@ -78,6 +78,7 @@ import android.os.vibrator.persistence.ParsedVibration;
@@ -34,11 +34,11 @@ index f07e9bd28..588701457 100644
 +                ", flags=" + flags + ", privFlags=" + privFlags);
 +        }
 +
-+        // Force REJECT constant for keyboard haptics to ensure stronger feedback
++        // Force GESTURE_THRESHOLD_ACTIVATE constant for keyboard haptics to ensure stronger feedback
 +        int effectiveConstant = constant;
 +        if (isKeyboardHaptic) {
-+            // Replace with REJECT constant which maps to effect 5 in HAL
-+            effectiveConstant = HapticFeedbackConstants.REJECT;
++            // Replace with GESTURE_THRESHOLD_ACTIVATE constant which maps to effect 0 in HAL
++            effectiveConstant = HapticFeedbackConstants.GESTURE_THRESHOLD_ACTIVATE;
 +
 +            // Force flags to ensure vibration happens regardless of settings
 +            flags |= HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING;

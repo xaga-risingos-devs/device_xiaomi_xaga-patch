@@ -1,0 +1,225 @@
+From 3ee626afea6d805613e9affccb4b3cd76d6a8e32 Mon Sep 17 00:00:00 2001
+From: Hecheng Yu <kde-yyds@qq.com>
+Date: Sun, 19 Jul 2026 14:29:53 +0800
+Subject: [PATCH] haptics: Rework fallback logic on device without primitive
+ support
+
+---
+ .../data/repository/MSDLRepositoryImpl.kt     | 54 ++++++-------------
+ .../android/msdl/domain/MSDLPlayerImpl.kt     | 38 +++++++++++++
+ 2 files changed, 53 insertions(+), 39 deletions(-)
+
+diff --git a/msdllib/src/com/google/android/msdl/data/repository/MSDLRepositoryImpl.kt b/msdllib/src/com/google/android/msdl/data/repository/MSDLRepositoryImpl.kt
+index 81979a2..dfa6181 100644
+--- a/msdllib/src/com/google/android/msdl/data/repository/MSDLRepositoryImpl.kt
++++ b/msdllib/src/com/google/android/msdl/data/repository/MSDLRepositoryImpl.kt
+@@ -65,11 +65,7 @@ internal class MSDLRepositoryImpl : MSDLRepository {
+                                     delayMillis = SPIN_DELAY.toInt(),
+                                 ),
+                             ),
+-                            VibrationEffect.createWaveform(
+-                                SPIN_WAVEFORM_TIMINGS,
+-                                SPIN_WAVEFORM_AMPLITUDES,
+-                                -1,
+-                            ),
++                            VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK),
+                         )
+                     },
+                 HapticToken.NEGATIVE_CONFIRMATION_MEDIUM_EMPHASIS to
+@@ -92,13 +88,10 @@ internal class MSDLRepositoryImpl : MSDLRepository {
+                                     delayMillis = 114,
+                                 ),
+                             ),
+-                            VibrationEffect.createWaveform(
+-                                longArrayOf(10, 10, 10, 114, 10, 10, 10, 114, 10, 10, 10),
+-                                intArrayOf(10, 255, 20, 0, 10, 255, 20, 0, 10, 255, 20),
+-                                -1,
+-                            ),
++                            VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK),
+                         )
+                     },
++
+                 HapticToken.POSITIVE_CONFIRMATION_HIGH_EMPHASIS to
+                     MSDLHapticData {
+                         HapticComposition(
+@@ -114,11 +107,7 @@ internal class MSDLRepositoryImpl : MSDLRepository {
+                                     delayMillis = 114,
+                                 ),
+                             ),
+-                            VibrationEffect.createWaveform(
+-                                longArrayOf(10, 10, 10, 114, 10, 10, 10),
+-                                intArrayOf(10, 255, 20, 0, 10, 255, 20),
+-                                -1,
+-                            ),
++                            VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK),
+                         )
+                     },
+                 HapticToken.POSITIVE_CONFIRMATION_MEDIUM_EMPHASIS to
+@@ -136,11 +125,7 @@ internal class MSDLRepositoryImpl : MSDLRepository {
+                                     delayMillis = 52,
+                                 ),
+                             ),
+-                            VibrationEffect.createWaveform(
+-                                longArrayOf(10, 10, 10, 52, 10, 10, 10),
+-                                intArrayOf(10, 255, 20, 0, 10, 255, 20),
+-                                -1,
+-                            ),
++                            VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK),
+                         )
+                     },
+                 HapticToken.POSITIVE_CONFIRMATION_LOW_EMPHASIS to
+@@ -158,11 +143,7 @@ internal class MSDLRepositoryImpl : MSDLRepository {
+                                     delayMillis = 52,
+                                 ),
+                             ),
+-                            VibrationEffect.createWaveform(
+-                                longArrayOf(5, 52, 10, 10, 10),
+-                                intArrayOf(100, 0, 10, 255, 20),
+-                                -1,
+-                            ),
++                            VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK),
+                         )
+                     },
+                 HapticToken.NEUTRAL_CONFIRMATION_HIGH_EMPHASIS to
+@@ -175,11 +156,7 @@ internal class MSDLRepositoryImpl : MSDLRepository {
+                                     delayMillis = 0,
+                                 )
+                             ),
+-                            VibrationEffect.createWaveform(
+-                                longArrayOf(50, 100, 100, 50),
+-                                intArrayOf(5, 50, 20, 10),
+-                                -1,
+-                            ),
++                            VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK),
+                         )
+                     },
+                 HapticToken.NEUTRAL_CONFIRMATION_MEDIUM_EMPHASIS to
+@@ -195,6 +172,7 @@ internal class MSDLRepositoryImpl : MSDLRepository {
+                             VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK),
+                         )
+                     },
++
+                 HapticToken.LONG_PRESS to
+                     MSDLHapticData {
+                         HapticComposition(
+@@ -257,7 +235,7 @@ internal class MSDLRepositoryImpl : MSDLRepository {
+                                     delayMillis = 0,
+                                 )
+                             ),
+-                            VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK),
++                            VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK),
+                         )
+                     },
+                 HapticToken.DRAG_INDICATOR_CONTINUOUS to
+@@ -270,11 +248,7 @@ internal class MSDLRepositoryImpl : MSDLRepository {
+                                     delayMillis = 0,
+                                 )
+                             },
+-                            VibrationEffect.createWaveform(
+-                                longArrayOf(10, 20, 20, 10),
+-                                intArrayOf(10, 30, 50, 10),
+-                                -1,
+-                            ),
++                            VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK),
+                         )
+                     },
+                 HapticToken.DRAG_INDICATOR_DISCRETE to
+@@ -287,9 +261,10 @@ internal class MSDLRepositoryImpl : MSDLRepository {
+                                     delayMillis = 0,
+                                 )
+                             ),
+-                            VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK),
++                            VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK),
+                         )
+                     },
++
+                 HapticToken.TAP_LOW_EMPHASIS to
+                     MSDLHapticData {
+                         HapticComposition(
+@@ -300,9 +275,10 @@ internal class MSDLRepositoryImpl : MSDLRepository {
+                                     delayMillis = 0,
+                                 )
+                             ),
+-                            VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK),
++                            VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK),
+                         )
+                     },
++
+                 HapticToken.KEYPRESS_STANDARD to
+                     MSDLHapticData {
+                         HapticComposition(
+@@ -326,7 +302,7 @@ internal class MSDLRepositoryImpl : MSDLRepository {
+                                     delayMillis = 0,
+                                 )
+                             ),
+-                            VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK),
++                            VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK),
+                         )
+                     },
+                 HapticToken.KEYPRESS_RETURN to
+diff --git a/msdllib/src/com/google/android/msdl/domain/MSDLPlayerImpl.kt b/msdllib/src/com/google/android/msdl/domain/MSDLPlayerImpl.kt
+index 606f634..9c943d6 100644
+--- a/msdllib/src/com/google/android/msdl/domain/MSDLPlayerImpl.kt
++++ b/msdllib/src/com/google/android/msdl/domain/MSDLPlayerImpl.kt
+@@ -29,6 +29,10 @@ import com.google.android.msdl.logging.MSDLHistoryLogger
+ import com.google.android.msdl.logging.MSDLHistoryLoggerImpl
+ import java.util.concurrent.Executor
+ 
++import android.os.Handler
++import android.os.Looper
++import android.os.SystemClock
++
+ /**
+  * Implementation of the MSDLPlayer.
+  *
+@@ -50,6 +54,8 @@ internal class MSDLPlayerImpl(
+     /** A logger to keep a history of playback events */
+     private val historyLogger = MSDLHistoryLoggerImpl(MSDLHistoryLogger.HISTORY_SIZE)
+ 
++    private val handler = Handler(Looper.getMainLooper())
++
+     // TODO(b/355230334): This should be retrieved from the system Settings
+     override fun getSystemFeedbackLevel(): FeedbackLevel = MSDLPlayer.SYSTEM_FEEDBACK_LEVEL
+ 
+@@ -74,6 +80,38 @@ internal class MSDLPlayerImpl(
+             // Play haptics only
+             // 1. Create the effect
+             val composition: HapticComposition? = hapticData?.get() as? HapticComposition
++
++            if (token == MSDLToken.SWITCH_ON || token == MSDLToken.SWITCH_OFF || token == MSDLToken.FAILURE) {
++                val effect = composition?.fallbackEffect
++                if (effect != null && vibrator.hasVibrator()) {
++                    val attributes =
++                    if (properties?.vibrationAttributes != null) {
++                        properties.vibrationAttributes
++                    } else {
++                        VibrationAttributes.Builder()
++                        .setUsage(VibrationAttributes.USAGE_TOUCH)
++                        .build()
++                    }
++                    // Play first click immediately
++                    executor.execute { vibrator.vibrate(effect, attributes) }
++                    // Schedule second click after 80ms
++                    handler.postDelayed({
++                        executor.execute { vibrator.vibrate(effect, attributes) }
++                    }, 100) // 100ms pause between clicks
++                    if(token == MSDLToken.FAILURE) {
++                        handler.postDelayed({
++                            executor.execute { vibrator.vibrate(effect, attributes) }
++                        }, 200) // 100ms pause between clicks
++                    }
++                    // Log the event once (or twice, but we'll log once)
++                    historyLogger.addEvent(MSDLEvent(token, properties))
++                    return // Skip the rest of the normal logic
++                }
++                // If something fails, fall through to normal logic
++            }
++
++
++
+             val effect =
+                 if (useHapticFallbackForToken[token] == true) {
+                     composition?.fallbackEffect
+-- 
+2.54.0
+
