@@ -1,4 +1,4 @@
-From f75d5fe7069cd6832e1c6feb6b9a0db3df5c8c98 Mon Sep 17 00:00:00 2001
+From 0215d9ea89a7c1844224fd35a20e3cceab9074da Mon Sep 17 00:00:00 2001
 From: Hecheng Yu <kde-yyds@qq.com>
 Date: Mon, 25 Aug 2025 09:20:25 +0800
 Subject: [PATCH] Add a switch to control prop
@@ -15,7 +15,7 @@ Subject: [PATCH] Add a switch to control prop
 
 diff --git a/res/values-zh-rCN/performance_mode_strings.xml b/res/values-zh-rCN/performance_mode_strings.xml
 new file mode 100644
-index 00000000000..3c668b36aa8
+index 0000000..3c668b3
 --- /dev/null
 +++ b/res/values-zh-rCN/performance_mode_strings.xml
 @@ -0,0 +1,4 @@
@@ -25,7 +25,7 @@ index 00000000000..3c668b36aa8
 +</resources>
 diff --git a/res/values/performance_mode_strings.xml b/res/values/performance_mode_strings.xml
 new file mode 100644
-index 00000000000..6e931a5f773
+index 0000000..6e931a5
 --- /dev/null
 +++ b/res/values/performance_mode_strings.xml
 @@ -0,0 +1,5 @@
@@ -35,7 +35,7 @@ index 00000000000..6e931a5f773
 +    <string name="mt6895_performance_mode_summary">Turn off Cortex-A55 little cores to boost performance and save power</string>
 +</resources>
 diff --git a/res/xml/power_usage_summary.xml b/res/xml/power_usage_summary.xml
-index 950ca2de9e9..92b1756551d 100644
+index b62a3db..108fdf4 100644
 --- a/res/xml/power_usage_summary.xml
 +++ b/res/xml/power_usage_summary.xml
 @@ -101,6 +101,12 @@
@@ -52,10 +52,10 @@ index 950ca2de9e9..92b1756551d 100644
          android:key="battery_info"
          android:title="@string/battery_info"
 diff --git a/src/com/android/settings/fuelgauge/batteryusage/PowerUsageSummary.java b/src/com/android/settings/fuelgauge/batteryusage/PowerUsageSummary.java
-index c74cba66859..fb15c8ac59f 100644
+index 60062da..731dcdf 100644
 --- a/src/com/android/settings/fuelgauge/batteryusage/PowerUsageSummary.java
 +++ b/src/com/android/settings/fuelgauge/batteryusage/PowerUsageSummary.java
-@@ -26,6 +26,7 @@ import android.database.ContentObserver;
+@@ -25,6 +25,7 @@ import android.database.ContentObserver;
  import android.net.Uri;
  import android.os.Bundle;
  import android.os.Handler;
@@ -63,15 +63,15 @@ index c74cba66859..fb15c8ac59f 100644
  import android.provider.Settings.Global;
  
  import androidx.annotation.NonNull;
-@@ -34,6 +35,7 @@ import androidx.annotation.VisibleForTesting;
+@@ -33,6 +34,7 @@ import androidx.annotation.VisibleForTesting;
  import androidx.loader.app.LoaderManager;
  import androidx.loader.content.Loader;
  import androidx.preference.Preference;
 +import androidx.preference.SwitchPreference;
  
- import com.android.internal.annotations.Initializer;
  import com.android.settings.R;
-@@ -124,7 +126,16 @@ public class PowerUsageSummary extends PowerUsageBase
+ import com.android.settings.Utils;
+@@ -145,7 +147,16 @@ public class PowerUsageSummary extends PowerUsageBase
  
          initFeatureProvider();
          initPreference();
@@ -90,5 +90,5 @@ index c74cba66859..fb15c8ac59f 100644
  
          if (Utils.isBatteryPresent(getContext())) {
 -- 
-2.55.0
+2.54.0
 
