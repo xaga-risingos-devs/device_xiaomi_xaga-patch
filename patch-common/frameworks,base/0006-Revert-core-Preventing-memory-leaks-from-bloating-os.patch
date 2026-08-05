@@ -1,0 +1,38 @@
+From ab47c073791a527f37d33c154c30072fc9aadb3d Mon Sep 17 00:00:00 2001
+From: Hecheng Yu <kde-yyds@qq.com>
+Date: Tue, 4 Aug 2026 20:10:42 +0800
+Subject: [PATCH 6/6] Revert "core: Preventing memory leaks from bloating os
+ memory that leads to OOM"
+
+This reverts commit e413084ed8ab8419804d5ed878a852637aa8910e.
+---
+ core/java/android/os/StrictMode.java | 6 +-----
+ 1 file changed, 1 insertion(+), 5 deletions(-)
+
+diff --git a/core/java/android/os/StrictMode.java b/core/java/android/os/StrictMode.java
+index 612a29ad3..7e4a7c5c3 100644
+--- a/core/java/android/os/StrictMode.java
++++ b/core/java/android/os/StrictMode.java
+@@ -1559,8 +1559,6 @@ public final class StrictMode {
+         if (targetSdkVersion >= Build.VERSION_CODES.N) {
+             builder.detectFileUriExposure();
+             builder.penaltyDeathOnFileUriExposure();
+-            builder.detectActivityLeaks();
+-            builder.detectLeakedRegistrationObjects();
+         }
+ 
+         if (Build.IS_USER || Build.IS_USERDEBUG || DISABLE || SystemProperties.getBoolean(DISABLE_PROPERTY, false)) {
+@@ -2663,9 +2661,7 @@ public final class StrictMode {
+ 
+     /** @hide */
+     public static void onVmPolicyViolation(Violation originStack) {
+-        boolean forceDeath = originStack instanceof IntentReceiverLeakedViolation 
+-            || originStack instanceof ServiceConnectionLeakedViolation;
+-        onVmPolicyViolation(originStack, forceDeath);
++        onVmPolicyViolation(originStack, false);
+     }
+ 
+     /** @hide */
+-- 
+2.55.0
+
