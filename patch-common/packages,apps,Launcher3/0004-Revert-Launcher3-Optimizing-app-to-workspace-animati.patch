@@ -1,7 +1,7 @@
-From b4106f9661d3a6c6f6a448ab85d2b4bb1036eb17 Mon Sep 17 00:00:00 2001
+From 46d10032d3d32564a20c59aa7881c67fa386f27e Mon Sep 17 00:00:00 2001
 From: Hecheng Yu <kde-yyds@qq.com>
 Date: Tue, 30 Jun 2026 12:12:43 +0800
-Subject: [PATCH 4/8] Revert "Launcher3: Optimizing app to workspace animation"
+Subject: [PATCH 4/7] Revert "Launcher3: Optimizing app to workspace animation"
 
 This reverts commit 2a22f2787ec8868d8458799f5ec253d10af90fad.
 ---
@@ -10,7 +10,7 @@ This reverts commit 2a22f2787ec8868d8458799f5ec253d10af90fad.
  2 files changed, 2 insertions(+), 25 deletions(-)
 
 diff --git a/quickstep/src/com/android/quickstep/util/BaseDepthController.java b/quickstep/src/com/android/quickstep/util/BaseDepthController.java
-index 41de6fa..6e9cbb8 100644
+index 68e65a7..728a982 100644
 --- a/quickstep/src/com/android/quickstep/util/BaseDepthController.java
 +++ b/quickstep/src/com/android/quickstep/util/BaseDepthController.java
 @@ -47,7 +47,6 @@ import com.android.launcher3.statemanager.StateManager;
@@ -21,7 +21,7 @@ index 41de6fa..6e9cbb8 100644
  import com.android.systemui.shared.system.BlurUtils;
  
  /**
-@@ -91,8 +90,6 @@ public class BaseDepthController {
+@@ -92,8 +91,6 @@ public class BaseDepthController {
      protected final WallpaperManager mWallpaperManager;
      protected boolean mCrossWindowBlursEnabled;
  
@@ -30,7 +30,7 @@ index 41de6fa..6e9cbb8 100644
      /**
       * Ratio from 0 to 1, where 0 is fully zoomed out, and 1 is zoomed in.
       *
-@@ -204,22 +201,8 @@ public class BaseDepthController {
+@@ -205,22 +202,8 @@ public class BaseDepthController {
          float depth = mDepth;
          IBinder windowToken = mLauncher.getRootView().getWindowToken();
          if (windowToken != null) {
@@ -75,5 +75,5 @@ index 1ebd34a..158a6d6 100644
              animation.add(blurAnimator)
  
 -- 
-2.54.0
+2.55.0
 

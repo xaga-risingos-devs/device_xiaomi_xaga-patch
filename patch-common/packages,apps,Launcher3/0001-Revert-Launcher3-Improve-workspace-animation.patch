@@ -1,7 +1,7 @@
-From bff598308e4448bc2e42d02e9aa5f011545b69a6 Mon Sep 17 00:00:00 2001
+From 09e0caa876663a8e36043f8b25d6019f72551610 Mon Sep 17 00:00:00 2001
 From: Hecheng Yu <kde-yyds@qq.com>
 Date: Tue, 30 Jun 2026 12:11:06 +0800
-Subject: [PATCH 1/8] Revert "Launcher3: Improve workspace animation"
+Subject: [PATCH 1/7] Revert "Launcher3: Improve workspace animation"
 
 This reverts commit 92d035a9c4061d7be91be4c96b9c804fc291b0ac.
 ---
@@ -10,10 +10,10 @@ This reverts commit 92d035a9c4061d7be91be4c96b9c804fc291b0ac.
  2 files changed, 8 insertions(+), 11 deletions(-)
 
 diff --git a/quickstep/src/com/android/quickstep/util/BaseDepthController.java b/quickstep/src/com/android/quickstep/util/BaseDepthController.java
-index 5ca86bc..41de6fa 100644
+index 92fd008..68e65a7 100644
 --- a/quickstep/src/com/android/quickstep/util/BaseDepthController.java
 +++ b/quickstep/src/com/android/quickstep/util/BaseDepthController.java
-@@ -208,7 +208,7 @@ public class BaseDepthController {
+@@ -209,7 +209,7 @@ public class BaseDepthController {
              ? depth
              : 0f;
  
@@ -22,16 +22,16 @@ index 5ca86bc..41de6fa 100644
                      || (zoom == 0f && mLastWallpaperZoom != 0f)
                      || (zoom == 1f && mLastWallpaperZoom != 1f)) {
  
-@@ -248,7 +248,7 @@ public class BaseDepthController {
+@@ -251,7 +251,7 @@ public class BaseDepthController {
          int newBlur = mCrossWindowBlursEnabled && !hasOpaqueBg && !mPauseBlurs ? (int) (blurAmount
                  * mMaxBlurRadius) : 0;
          int delta = Math.abs(newBlur - previousBlur);
 -        if (skipSimilarBlur && delta < Utilities.dpToPx(2) && newBlur != 0 && previousBlur != 0
 +        if (skipSimilarBlur && delta < Utilities.dpToPx(1) && newBlur != 0 && previousBlur != 0
                  && blurAmount != 1f) {
-             Log.d(TAG, "Skipping small blur delta. newBlur: " + newBlur + " previousBlur: "
-                     + previousBlur + " delta: " + delta + " surface: " + blurSurface);
-@@ -359,8 +359,8 @@ public class BaseDepthController {
+             if (DEBUG) {
+                 Log.d(TAG, "Skipping small blur delta. newBlur: " + newBlur + " previousBlur: "
+@@ -370,8 +370,8 @@ public class BaseDepthController {
              depthF = depth;
          } else {
              // Round out the depth to dedupe frequent, non-perceptable updates
@@ -42,7 +42,7 @@ index 5ca86bc..41de6fa 100644
          }
          if (Float.compare(mDepth, depthF) == 0) {
              return;
-@@ -391,7 +391,7 @@ public class BaseDepthController {
+@@ -404,7 +404,7 @@ public class BaseDepthController {
      private @Nullable SurfaceTransaction setupBlurSurface() {
          SurfaceTransaction surfaceTransaction = null;
  
@@ -97,5 +97,5 @@ index f36df1a..1ebd34a 100644
  
                  override fun onAnimationPause(animation: Animator) {
 -- 
-2.54.0
+2.55.0
 
